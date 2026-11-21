@@ -291,7 +291,7 @@ function loadCloud(done) {
 /* ───────── черновики ───────── */
 const carFields = c => ({carId: c && c.id || '', brand: c && c.brand || '', model: c && c.model || '', year: c && c.year || '', plate: c && c.plate || '', client: c && c.client || '', phone: c && c.phone || ''});
 const newDent = z => ({s: S.sizes[0].id, ls: ['flat'], q: 1, z: z || ''});
-const newDraft = c => ({car: carFields(c), paint: 'fresh', dents: [newDent()], hail: {on: false, parts: {}, up: 0, down: 0}, film: true, arm: '', comment: ''});
+const newDraft = c => ({car: carFields(c), paint: 'fresh', dents: [newDent()], hail: {on: false, parts: {}, up: 0, down: 0}, film: false, arm: '', comment: ''});
 const newIDraft = c => ({car: carFields(c), marks: {}, comment: ''});
 let draft, idraft, cdraft = null, hfilter = 'all', carQ = '', locked = false, mapMode = 'dent';
 
@@ -433,7 +433,7 @@ V.calc = () => {
     <div class="lbl">Скидка за количество</div><div class="chips">${pc.map(v => `<button class="chip sm ${h.down === v ? 'on' : ''}" data-act="hail-down" data-v="${v}">${v ? '−' + v + '%' : 'Нет'}</button>`).join('')}</div>
     <div class="row between sum"><span class="muted">${dentsWord(t.hail.n)} · ${dur(t.hail.m)}</span><b>${rub(t.hail.p)}</b></div>` : '<p class="muted small" style="margin:8px 0 0">Отдельная позиция: цена за вмятину и количество по каждой детали.</p>'}</div>
   <div class="card"><div class="cap">Дополнительно</div>
-    <div class="row between"><span>Защитная плёнка, ${rub(S.extras.film)}</span><button class="chip sm ${draft.film ? 'on' : ''}" data-act="film">${draft.film ? 'Добавлена' : 'Добавить'}</button></div>
+    <div class="row between"><span>Защитная плёнка, ${rub(S.extras.film)}</span><button class="chip sm ${draft.film ? 'on' : ''}" data-act="film" role="checkbox" aria-checked="${draft.film}">${draft.film ? '✓ Есть' : 'Нет'}</button></div>
     <label for="calc-arm">Арматурные работы, ₽</label><input id="calc-arm" data-s="calcroot" data-f="arm" inputmode="numeric" maxlength="7" value="${esc(draft.arm)}" placeholder="Впишите сумму, если нужны"></div>
   <div class="card"><label for="calc-comment">Комментарий</label><textarea id="calc-comment" data-s="calcroot" data-f="comment" maxlength="500" placeholder="Например: град, машина с пробегом, клиент торопится">${esc(draft.comment)}</textarea>
     <div class="row between total" style="margin:16px 0"><div><span class="muted small">Итого, ориентировочно</span><b id="tot-p">${rub(t.p)}</b></div><div class="t" style="text-align:right"><span class="muted small">Время работ</span><b>${dur(t.m)}</b></div></div>
