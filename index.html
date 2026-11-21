@@ -287,7 +287,7 @@ const carFields = c => ({carId: c && c.id || '', brand: c && c.brand || '', mode
 const newDent = z => ({s: S.sizes[0].id, l: S.locs[0].id, q: 1, z: z || ''});
 const newDraft = c => ({car: carFields(c), paint: 'fresh', dents: [newDent()], comment: ''});
 const newIDraft = c => ({car: carFields(c), marks: {}, comment: ''});
-let draft, idraft, cdraft = null, hfilter = 'all', carQ = '';
+let draft, idraft, cdraft = null, hfilter = 'all', carQ = '', locked = false;
 
 function calcDent(d, paint) {
   const s = S.sizes.find(x => x.id === d.s) || S.sizes[0], l = S.locs.find(x => x.id === d.l) || S.locs[0];
@@ -512,6 +512,7 @@ const TABS = [
 const TAB_OF = {home: 'home', library: 'home', settings: 'home', insp: 'home', calc: 'calc', map: 'calc', inspect: 'inspect', cars: 'cars', car: 'cars', history: 'history', order: 'history'};
 function route() { const p = location.hash.replace(/^#\/?/, '').split('/'); return {name: p[0] || 'home', id: p[1] || ''}; }
 function render() {
+  if (locked) return;
   const r = route(); let html;
   if (r.name === 'car') html = r.id === 'new' ? V.carnew() : V.car(r.id);
   else if (r.name === 'order') html = V.order(r.id);
@@ -604,11 +605,30 @@ document.addEventListener('input', e => {
 
 /* ───────── запуск ───────── */
 $('#dl-brands').innerHTML = Object.keys(BRANDS).map(b => `<option value="${esc(b)}">`).join('');
-ingest(lsAll());
-draft = newDraft(); idraft = newIDraft();
+const ALLOWED = ['3dbc5668d9ad59e693e9efa80c629d33013e71ce0d510c352301543995f4c073']; // отпечатки Telegram ID тех, кому открыт доступ
+const isLocal = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+const me = tg && tg.initDataUnsafe && tg.initDataUnsafe.user ? tg.initDataUnsafe.user.id : null;
 if (tg) { try { tg.ready(); tg.expand(); if (inTg) { tg.setHeaderColor('#0d131f'); tg.setBackgroundColor('#0d131f'); tg.BackButton.onClick(() => history.back()); } } catch (e) {} }
-render();
-if (cloud) loadCloud(() => { const a = document.activeElement; if (!a || !/INPUT|TEXTAREA|SELECT/.test(a.tagName)) render(); });
+async function allowed() {
+  if (isLocal) return true;
+  if (!me || !window.crypto || !crypto.subtle) return false;
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('pdr:' + me));
+  const hex = Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+  return ALLOWED.indexOf(hex) >= 0;
+}
+locked = true;
+allowed().catch(() => false).then(ok => {
+  if (!ok) {
+    $('#nav').style.display = 'none';
+    $('#app').innerHTML = `<div class="card" style="margin-top:22vh;text-align:center"><h1>Доступ закрыт</h1><p class="muted" style="margin:8px 0 0">${me ? 'Это личное приложение мастера. Ваш Telegram ID: ' + me : 'Приложение открывается только через бота в Telegram.'}</p></div>`;
+    return;
+  }
+  locked = false;
+  ingest(lsAll());
+  draft = newDraft(); idraft = newIDraft();
+  render();
+  if (cloud) loadCloud(() => { const a = document.activeElement; if (!a || !/INPUT|TEXTAREA|SELECT/.test(a.tagName)) render(); });
+});
 </script>
 </body>
 </html>
