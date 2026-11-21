@@ -605,7 +605,7 @@ document.addEventListener('input', e => {
 
 /* ───────── запуск ───────── */
 $('#dl-brands').innerHTML = Object.keys(BRANDS).map(b => `<option value="${esc(b)}">`).join('');
-const ALLOWED = ['3dbc5668d9ad59e693e9efa80c629d33013e71ce0d510c352301543995f4c073']; // отпечатки Telegram ID тех, кому открыт доступ
+const ALLOWED = ['3dbc5668d9ad59e693e9efa80c629d33013e71ce0d510c352301543995f4c073', '68bc4b3cc5a2ddce4dbbfedcb885b68310562cb473685c46cc80ce00fa20ce20']; // отпечатки Telegram ID тех, кому открыт доступ
 const isLocal = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
 const me = tg && tg.initDataUnsafe && tg.initDataUnsafe.user ? tg.initDataUnsafe.user.id : null;
 if (tg) { try { tg.ready(); tg.expand(); if (inTg) { tg.setHeaderColor('#0d131f'); tg.setBackgroundColor('#0d131f'); tg.BackButton.onClick(() => history.back()); } } catch (e) {} }
