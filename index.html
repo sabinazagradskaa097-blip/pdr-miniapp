@@ -143,7 +143,8 @@ const DEFAULTS = {
     {id: 'stretch', label: 'Растянутый металл', add: 'stretch'},
     {id: 'device', label: 'Работа прибором', add: 'device'}
   ],
-  extras: {film: 1500, hailPrice: 500, hailMin: 5, stretchS: 500, stretchL: 1000, device: 1000},
+  extras: {film: 1500, hailPrice: 500, hailMin: 10, stretchS: 500, stretchL: 1000, device: 1000, visit: 1000, armMin: 60},
+  phone: '', addr: '', v: 2,
   oldK: 1.15,
   round: 100
 };
@@ -248,9 +249,12 @@ function applySettings(raw) {
   if (raw && typeof raw === 'object') {
     if (typeof raw.name === 'string' && raw.name.trim()) d.name = raw.name.trim().slice(0, 40);
     if (typeof raw.sub === 'string') d.sub = raw.sub.slice(0, 80);
+    if (typeof raw.phone === 'string') d.phone = raw.phone.slice(0, 30);
+    if (typeof raw.addr === 'string') d.addr = raw.addr.slice(0, 120);
     d.sizes.forEach(s => { const r = (raw.sizes || []).find(x => x && x.id === s.id); if (r) { s.price = num(r.price); s.min = num(r.min); } });
     d.locs.forEach(l => { const r = (raw.locs || []).find(x => x && x.id === l.id); if (l.k != null && r && num(r.k) > 0) l.k = num(r.k); });
     Object.keys(d.extras).forEach(k => { if (raw.extras && raw.extras[k] != null) d.extras[k] = num(raw.extras[k]); });
+    if (!(raw.v >= 2) && raw.extras && num(raw.extras.hailMin) === 5) d.extras.hailMin = 10; // прежняя заглушка времени на град
     if (num(raw.oldK) > 0) d.oldK = num(raw.oldK);
     if (num(raw.round) > 0) d.round = num(raw.round);
   }
@@ -291,7 +295,7 @@ function loadCloud(done) {
 /* ───────── черновики ───────── */
 const carFields = c => ({carId: c && c.id || '', brand: c && c.brand || '', model: c && c.model || '', year: c && c.year || '', plate: c && c.plate || '', client: c && c.client || '', phone: c && c.phone || ''});
 const newDent = z => ({s: S.sizes[0].id, ls: ['flat'], q: 1, z: z || ''});
-const newDraft = c => ({car: carFields(c), paint: 'fresh', dents: [newDent()], hail: {on: false, parts: {}, up: 0, down: 0}, film: false, arm: '', comment: ''});
+const newDraft = c => ({car: carFields(c), paint: 'fresh', dents: [newDent()], hail: {on: false, parts: {}, up: 0, down: 0}, film: false, visit: false, arm: '', comment: ''});
 const newIDraft = c => ({car: carFields(c), marks: {}, comment: ''});
 let draft, idraft, cdraft = null, hfilter = 'all', carQ = '', locked = false, mapMode = 'dent';
 
@@ -301,7 +305,7 @@ function calcDent(d, paint) {
   let k = 1, add = 0;
   ls.forEach(l => { if (l.add === 'stretch') add += si < 2 ? S.extras.stretchS : S.extras.stretchL; else if (l.add === 'device') add += S.extras.device; else k += l.k - 1; });
   const r = S.round || 100, q = d.q || 1;
-  return {p: Math.round((s.price * k * (paint === 'old' ? S.oldK : 1) + add) * q / r) * r, m: Math.round(s.min * k * q / 5) * 5, size: s.label, loc: ls.map(l => l.label).join(', ')};
+  return {p: Math.round((s.price * k * (paint === 'old' ? S.oldK : 1) * q + add) / r) * r, m: Math.round(s.min * k * q / 5) * 5, size: s.label, loc: ls.map(l => l.label).join(', ')};
 }
 function calcHail() {
   const h = draft.hail, r = S.round || 100;
@@ -310,8 +314,8 @@ function calcHail() {
 }
 function calcTotal() {
   const t = draft.dents.reduce((a, d) => { const c = calcDent(d, draft.paint); a.p += c.p; a.m += c.m; return a; }, {p: 0, m: 0});
-  const hail = calcHail(), film = draft.film ? S.extras.film : 0, arm = Math.round(num(draft.arm));
-  return {p: t.p + hail.p + film + arm, m: t.m + hail.m, hail, film, arm};
+  const hail = calcHail(), film = draft.film ? S.extras.film : 0, arm = Math.round(num(draft.arm)), visit = draft.visit ? S.extras.visit : 0;
+  return {p: t.p + hail.p + film + arm + visit, m: t.m + hail.m + (arm ? S.extras.armMin : 0), hail, film, arm, visit};
 }
 const dentsWord = n => { const a = n % 100, b = n % 10; return n + ' ' + (a > 10 && a < 20 ? 'вмятин' : b === 1 ? 'вмятина' : b > 1 && b < 5 ? 'вмятины' : 'вмятин'); };
 const hailNote = h => [h.up ? '+' + h.up + '% за сложность' : '', h.down ? '−' + h.down + '% за количество' : ''].filter(Boolean).join(', ');
@@ -320,6 +324,7 @@ function extraRows(o) { // [название, сумма] для заказа и
   if (o.hail && o.hail.n) rows.push(['Град: ' + dentsWord(o.hail.n) + (hailNote(o.hail) ? ' (' + hailNote(o.hail) + ')' : ''), o.hail.p]);
   if (o.film) rows.push(['Защитная плёнка', o.film]);
   if (o.arm) rows.push(['Арматурные работы', o.arm]);
+  if (o.visit) rows.push(['Выезд', o.visit]);
   return rows;
 }
 const carTitle = c => [c.brand, c.model, c.year].filter(Boolean).join(' ') || 'Автомобиль без названия';
@@ -434,9 +439,10 @@ V.calc = () => {
     <div class="row between sum"><span class="muted">${dentsWord(t.hail.n)} · ${dur(t.hail.m)}</span><b>${rub(t.hail.p)}</b></div>` : '<p class="muted small" style="margin:8px 0 0">Отдельная позиция: цена за вмятину и количество по каждой детали.</p>'}</div>
   <div class="card"><div class="cap">Дополнительно</div>
     <div class="row between"><span>Защитная плёнка, ${rub(S.extras.film)}</span><button class="chip sm ${draft.film ? 'on' : ''}" data-act="film" role="checkbox" aria-checked="${draft.film}">${draft.film ? '✓ Есть' : 'Нет'}</button></div>
-    <label for="calc-arm">Арматурные работы, ₽</label><input id="calc-arm" data-s="calcroot" data-f="arm" inputmode="numeric" maxlength="7" value="${esc(draft.arm)}" placeholder="Впишите сумму, если нужны"></div>
+    <div class="row between" style="margin-top:12px"><span>Выезд, ${rub(S.extras.visit)}</span><button class="chip sm ${draft.visit ? 'on' : ''}" data-act="visit" role="checkbox" aria-checked="${draft.visit}">${draft.visit ? '✓ Есть' : 'Нет'}</button></div>
+    <label for="calc-arm">Арматурные работы, ₽ <span class="small">(плюс ${dur(S.extras.armMin)} к времени)</span></label><input id="calc-arm" data-s="calcroot" data-f="arm" inputmode="numeric" maxlength="7" value="${esc(draft.arm)}" placeholder="Впишите сумму, если нужны"></div>
   <div class="card"><label for="calc-comment">Комментарий</label><textarea id="calc-comment" data-s="calcroot" data-f="comment" maxlength="500" placeholder="Например: град, машина с пробегом, клиент торопится">${esc(draft.comment)}</textarea>
-    <div class="row between total" style="margin:16px 0"><div><span class="muted small">Итого, ориентировочно</span><b id="tot-p">${rub(t.p)}</b></div><div class="t" style="text-align:right"><span class="muted small">Время работ</span><b>${dur(t.m)}</b></div></div>
+    <div class="row between total" style="margin:16px 0"><div><span class="muted small">Итого, ориентировочно</span><b id="tot-p">${rub(t.p)}</b></div><div class="t" style="text-align:right"><span class="muted small">Время работ</span><b id="tot-m">${dur(t.m)}</b></div></div>
     <button class="btn" data-act="save-order">Сохранить расчёт</button>
     <button class="btn ghost" data-act="clear-calc" style="margin-top:10px">Очистить расчёт</button></div>`;
 };
@@ -515,6 +521,9 @@ function estimateText(o) {
   lines.push('', 'Итого: ' + rub(o.total), 'Время работ: ' + dur(o.min));
   if (o.comment) lines.push('Комментарий: ' + o.comment);
   lines.push('', 'Расчёт ориентировочный, точная стоимость — после осмотра.');
+  if (S.phone || S.addr) lines.push('');
+  if (S.phone) lines.push('Телефон: ' + S.phone);
+  if (S.addr) lines.push('Адрес: ' + S.addr);
   return lines.join('\n');
 }
 V.order = id => { const o = DB.orders.find(x => x.id === id); if (!o) return V.missing();
@@ -537,6 +546,9 @@ V.insp = id => { const x = DB.insps.find(i => i.id === id); if (!x) return V.mis
 V.settings = () => `${back('#/home', 'Главная')}<h1>Настройки и прайс</h1><p class="sub">Изменения сохраняются сразу.</p>
   <div class="card"><div class="cap">Название</div><label for="set-name">Название приложения</label><input id="set-name" data-set="name" value="${esc(S.name)}" maxlength="40">
     <label for="set-sub">Подзаголовок</label><input id="set-sub" data-set="sub" value="${esc(S.sub)}" maxlength="80"></div>
+  <div class="card"><div class="cap">Контакты для сметы</div><p class="muted small" style="margin:0 0 4px">Подставляются в конец сметы, которую вы отправляете клиенту.</p>
+    <label for="set-phone">Телефон</label><input id="set-phone" data-set="phone" type="tel" inputmode="tel" value="${esc(S.phone)}" maxlength="30" placeholder="+7 900 000-00-00">
+    <label for="set-addr">Адрес</label><input id="set-addr" data-set="addr" value="${esc(S.addr)}" maxlength="120" placeholder="Город, улица, дом"></div>
   <div class="card"><div class="cap">Цена и время за одну вмятину</div><div class="set muted small"><span>Размер</span><span style="text-align:right">Цена, ₽</span><span style="text-align:right">Минут</span></div>
     ${S.sizes.map((s, i) => `<div class="set"><span>${esc(s.label)}</span><input inputmode="numeric" data-set="sizes.${i}.price" value="${s.price}" aria-label="Цена, ${esc(s.label)}"><input inputmode="numeric" data-set="sizes.${i}.min" value="${s.min}" aria-label="Минут, ${esc(s.label)}"></div>`).join('')}</div>
   <div class="card"><div class="cap">Коэффициенты за расположение</div><p class="muted small" style="margin:0 0 10px">Цена и время умножаются на это число. 1 — без наценки.</p>
@@ -549,7 +561,9 @@ V.settings = () => `${back('#/home', 'Главная')}<h1>Настройки и
     <div class="set two"><span>Работа прибором</span><input inputmode="numeric" data-set="extras.device" value="${S.extras.device}" aria-label="Работа прибором"></div>
     <div class="set two"><span>Защитная плёнка</span><input inputmode="numeric" data-set="extras.film" value="${S.extras.film}" aria-label="Защитная плёнка"></div>
     <div class="set two"><span>Град, за одну вмятину</span><input inputmode="numeric" data-set="extras.hailPrice" value="${S.extras.hailPrice}" aria-label="Град, за одну вмятину"></div>
-    <div class="set two"><span>Град, минут на одну вмятину</span><input inputmode="numeric" data-set="extras.hailMin" value="${S.extras.hailMin}" aria-label="Град, минут на одну вмятину"></div></div>
+    <div class="set two"><span>Град, минут на одну вмятину</span><input inputmode="numeric" data-set="extras.hailMin" value="${S.extras.hailMin}" aria-label="Град, минут на одну вмятину"></div>
+    <div class="set two"><span>Выезд</span><input inputmode="numeric" data-set="extras.visit" value="${S.extras.visit}" aria-label="Выезд"></div>
+    <div class="set two"><span>Арматурные работы, минут к времени</span><input inputmode="numeric" data-set="extras.armMin" value="${S.extras.armMin}" aria-label="Арматурные работы, минут к времени"></div></div>
   <div class="card"><div class="cap">Резервная копия</div><p class="muted small" style="margin:0 0 10px">${cloud ? 'Данные хранятся в облаке Telegram и видны на всех ваших устройствах.' : 'Сейчас данные хранятся только в этом браузере.'} Копию можно сохранить в «Избранное».</p>
     <button class="btn ghost" data-act="export">Скопировать все данные</button>
     <label for="imp">Восстановить из копии</label><textarea id="imp" placeholder="Вставьте сюда скопированные данные"></textarea>
@@ -592,6 +606,7 @@ const A = {
   'hail-up'(el) { draft.hail.up = +el.dataset.v; render(); },
   'hail-down'(el) { draft.hail.down = +el.dataset.v; render(); },
   film() { draft.film = !draft.film; render(); },
+  visit() { draft.visit = !draft.visit; render(); },
   'map-dent'() { mapMode = 'dent'; go('#/map'); },
   'map-hail'() { mapMode = 'hail'; go('#/map'); },
   'map-mode'(el) { mapMode = el.dataset.v; render(); },
@@ -612,7 +627,7 @@ const A = {
     const carId = upsertCar(c);
     const o = {id: uid(), t: Date.now(), carId, car: {brand: c.brand, model: c.model, year: c.year, plate: c.plate}, client: c.client, phone: c.phone, paint: draft.paint,
       dents: draft.dents.map(d => { const x = calcDent(d, draft.paint); return {s: d.s, ls: d.ls, z: d.z, q: d.q, p: x.p, m: x.m, size: x.size, loc: x.loc}; }),
-      hail: t.hail.n ? {parts: draft.hail.parts, n: t.hail.n, up: draft.hail.up, down: draft.hail.down, p: t.hail.p, m: t.hail.m} : null, film: t.film, arm: t.arm,
+      hail: t.hail.n ? {parts: draft.hail.parts, n: t.hail.n, up: draft.hail.up, down: draft.hail.down, p: t.hail.p, m: t.hail.m} : null, film: t.film, arm: t.arm, visit: t.visit,
       comment: draft.comment.trim(), total: t.p, min: t.m, status: 'new'};
     if (!put('o_' + o.id, o)) return;
     DB.orders.unshift(o); draft = newDraft(); buzz('success'); toast('Расчёт сохранён'); go('#/order/' + o.id);
@@ -662,7 +677,7 @@ document.addEventListener('change', e => {
     const path = el.dataset.set.split('.'); let o = S;
     for (let i = 0; i < path.length - 1; i++) o = o[path[i]];
     const key = path[path.length - 1];
-    o[key] = (key === 'name' || key === 'sub') ? el.value : num(el.value);
+    o[key] = ['name', 'sub', 'phone', 'addr'].indexOf(key) >= 0 ? el.value : num(el.value);
     put('settings', S); applySettings(S); toast('Сохранено');
   }
 });
@@ -673,7 +688,7 @@ document.addEventListener('input', e => {
   const target = {calc: draft.car, insp: idraft.car, car: cdraft, calcroot: draft, insproot: idraft}[s];
   if (!target) return;
   target[el.dataset.f] = el.dataset.f === 'plate' ? el.value.toUpperCase() : el.value;
-  if (el.dataset.f === 'arm') { const tp = $('#tot-p'); if (tp) tp.textContent = rub(calcTotal().p); }
+  if (el.dataset.f === 'arm') { const t = calcTotal(), tp = $('#tot-p'), tm = $('#tot-m'); if (tp) tp.textContent = rub(t.p); if (tm) tm.textContent = dur(t.m); }
   if (el.dataset.f === 'brand') { fillModels(el.value); if (s !== 'car') target.carId = ''; }
 });
 
