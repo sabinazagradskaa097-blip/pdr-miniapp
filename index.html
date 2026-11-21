@@ -1,0 +1,614 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="color-scheme" content="dark">
+<title>PDR Мастер</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+:root{
+  --bg:#0d131f; --surface:#151d2d; --surface2:#1c2740; --line:#27334e;
+  --text:#eaf0fa; --muted:#8a97b2; --accent:#4fd1b5; --on-accent:#05241d;
+  --warn:#f5b94a; --bad:#f2686b; --r:16px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--text);
+  font:16px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+body{padding-bottom:calc(84px + env(safe-area-inset-bottom))}
+main{max-width:560px;margin:0 auto;padding:18px 16px 8px}
+h1{font-size:24px;line-height:1.2;margin:0 0 4px;letter-spacing:-.01em}
+h1 em{font-style:normal;color:var(--accent)}
+.sub{color:var(--muted);font-size:14px;margin:0 0 16px}
+.cap{font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin:22px 0 10px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;margin-bottom:12px}
+.card .cap:first-child{margin-top:0}
+.muted{color:var(--muted)} .small{font-size:13px}
+.row{display:flex;align-items:center;gap:10px} .between{justify-content:space-between}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px}
+.stat span{display:block;color:var(--muted);font-size:13px;margin-bottom:6px}
+.stat b{font-size:22px;font-variant-numeric:tabular-nums}
+.btn{display:block;width:100%;min-height:50px;border:0;border-radius:14px;background:var(--accent);
+  color:var(--on-accent);font:600 16px/1 inherit;cursor:pointer;padding:0 16px}
+.btn:active{filter:brightness(.92)}
+.btn.ghost{background:transparent;color:var(--text);border:1px solid var(--line)}
+.btn.danger{background:transparent;color:var(--bad);border:1px solid rgba(242,104,107,.4)}
+.btn.sm{min-height:40px;width:auto;font-size:14px;border-radius:12px}
+.link{background:none;border:0;color:var(--accent);font:inherit;font-size:14px;cursor:pointer;padding:6px 0;text-decoration:underline;text-underline-offset:3px}
+.link.bad{color:var(--bad)}
+.back{display:inline-block;margin:0 0 10px;text-decoration:none}
+label,.lbl{display:block;font-size:14px;color:var(--muted);margin:14px 0 6px}
+.card>label:first-child,.card>.lbl:first-child{margin-top:0}
+input,select,textarea{width:100%;min-height:46px;background:var(--bg);border:1px solid var(--line);border-radius:12px;
+  color:var(--text);font:inherit;padding:10px 14px;outline:none;appearance:none;-webkit-appearance:none}
+textarea{min-height:84px;resize:vertical}
+input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+input::placeholder,textarea::placeholder{color:#55617c}
+select{background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);
+  background-position:calc(100% - 20px) 20px,calc(100% - 14px) 20px;background-size:6px 6px;background-repeat:no-repeat;padding-right:36px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{min-height:42px;padding:0 16px;border-radius:21px;border:1px solid var(--line);background:var(--bg);color:var(--text);font:inherit;font-size:15px;cursor:pointer}
+.chip.on{border-color:var(--accent);background:rgba(79,209,181,.14);color:var(--accent);font-weight:600}
+.seg{display:flex;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--bg)}
+.seg button{flex:1;min-height:42px;border:0;border-right:1px solid var(--line);background:none;color:var(--muted);font:inherit;font-size:14px;cursor:pointer;padding:0 6px}
+.seg button:last-child{border-right:0}
+.seg button.on{background:var(--surface2);color:var(--text);font-weight:600}
+.seg button.on.ok{background:rgba(79,209,181,.16);color:var(--accent)}
+.seg button.on.warn{background:rgba(245,185,74,.16);color:var(--warn)}
+.seg button.on.bad{background:rgba(242,104,107,.16);color:var(--bad)}
+.stepper{display:flex;align-items:center;border:1px solid var(--line);border-radius:12px;background:var(--bg)}
+.stepper button{width:56px;min-height:46px;border:0;background:none;color:var(--text);font-size:22px;cursor:pointer}
+.stepper span{flex:1;text-align:center;font-weight:600;font-variant-numeric:tabular-nums}
+.sum{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.total b{display:block;font-size:26px;color:var(--accent);font-variant-numeric:tabular-nums}
+.total .t b{font-size:18px;color:var(--text)}
+.item{display:block;width:100%;text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);
+  padding:14px 16px;margin-bottom:10px;color:var(--text);font:inherit;cursor:pointer;text-decoration:none}
+.item b{display:block;margin-bottom:2px}
+.item .muted{font-size:14px}
+.badge{display:inline-block;font-size:12px;font-weight:600;padding:3px 9px;border-radius:10px;white-space:nowrap}
+.badge.new{background:rgba(245,185,74,.16);color:var(--warn)}
+.badge.done{background:rgba(79,209,181,.16);color:var(--accent)}
+.badge.bad{background:rgba(242,104,107,.16);color:var(--bad)}
+.empty{text-align:center;color:var(--muted);padding:26px 16px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r)}
+.chk{padding:12px 0;border-bottom:1px solid var(--line)}
+.chk:last-child{border-bottom:0;padding-bottom:0}
+.chk:first-of-type{padding-top:0}
+.chk>span{display:block;font-size:15px;margin-bottom:8px}
+.dots{display:flex;gap:6px}
+.dots i{font-style:normal;font-size:13px;padding:3px 9px;border-radius:10px;border:1px solid var(--line);font-variant-numeric:tabular-nums}
+.dots .ok{color:var(--accent)} .dots .warn{color:var(--warn)} .dots .bad{color:var(--bad)}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--line);font-size:15px}
+.kv:last-child{border-bottom:0}
+.kv span:first-child{color:var(--muted)}
+.kv span:last-child{text-align:right}
+svg.car{display:block;width:100%;max-width:340px;margin:0 auto}
+svg.car .z{fill:var(--surface2);stroke:var(--line);stroke-width:1.5;cursor:pointer}
+svg.car .z.on{fill:rgba(79,209,181,.2);stroke:var(--accent)}
+svg.car text{fill:var(--muted);font-size:10px;text-anchor:middle;pointer-events:none}
+svg.car .n{fill:var(--accent)} svg.car .nt{fill:var(--on-accent);font-size:11px;font-weight:700}
+.lvl{display:inline-flex;gap:3px;vertical-align:middle}
+.lvl i{width:14px;height:5px;border-radius:3px;background:var(--line)}
+.lvl i.on{background:var(--accent)}
+.set{display:grid;grid-template-columns:1fr 96px 84px;gap:8px;align-items:center;margin-bottom:8px;font-size:14px}
+.set.two{grid-template-columns:1fr 96px}
+.set input{min-height:42px;padding:8px 10px;text-align:right}
+nav{position:fixed;left:0;right:0;bottom:0;background:rgba(13,19,31,.94);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  border-top:1px solid var(--line);display:flex;justify-content:center;padding-bottom:env(safe-area-inset-bottom);z-index:5}
+nav a{flex:1;max-width:112px;display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 0 9px;color:var(--muted);text-decoration:none;font-size:11px}
+nav a.on{color:var(--accent)}
+nav svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+#toast{position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));transform:translate(-50%,20px);background:var(--text);color:var(--bg);
+  padding:10px 16px;border-radius:12px;font-size:14px;font-weight:600;opacity:0;pointer-events:none;transition:.2s;z-index:9;max-width:88%;text-align:center}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+</style>
+</head>
+<body>
+<main id="app"></main>
+<nav id="nav"></nav>
+<div id="toast"></div>
+<datalist id="dl-brands"></datalist>
+<datalist id="dl-models"></datalist>
+<script>
+'use strict';
+/* ───────── основа ───────── */
+const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+const inTg = !!(tg && tg.initData);
+const $ = (s, r) => (r || document).querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const rub = n => Math.round(n || 0).toLocaleString('ru-RU') + ' ₽';
+const dur = m => { m = Math.round(m || 0); if (!m) return '—'; const h = Math.floor(m / 60), r = m % 60; return [h ? h + ' ч' : '', r ? r + ' мин' : ''].filter(Boolean).join(' '); };
+const dt = t => new Date(t).toLocaleDateString('ru-RU', {day: 'numeric', month: 'short', year: 'numeric'});
+const num = v => { const n = parseFloat(String(v).replace(',', '.')); return isFinite(n) && n >= 0 ? n : 0; };
+
+const DEFAULTS = {
+  name: 'PDR Мастер',
+  sub: 'Расчёт, осмотр и учёт заказов',
+  sizes: [
+    {id: 's1', label: 'До 2 см', price: 1500, min: 30},
+    {id: 's2', label: '2–4 см', price: 2500, min: 60},
+    {id: 's3', label: '4–7 см', price: 4000, min: 90},
+    {id: 's4', label: 'Свыше 7 см', price: 7000, min: 180}
+  ],
+  locs: [
+    {id: 'flat', label: 'Плоская панель', k: 1},
+    {id: 'rib', label: 'Ребро жёсткости', k: 1.4},
+    {id: 'edge', label: 'Кромка панели', k: 1.5},
+    {id: 'pillar', label: 'Стойка или рейлинг крыши', k: 1.6},
+    {id: 'alu', label: 'Алюминиевая панель', k: 1.5},
+    {id: 'hard', label: 'Труднодоступное место', k: 1.3}
+  ],
+  oldK: 1.15,
+  round: 100
+};
+const ZONES = [
+  ['hood', 'Капот'], ['roof', 'Крыша'], ['trunk', 'Крышка багажника'],
+  ['lf', 'Переднее левое крыло'], ['lfd', 'Передняя левая дверь'], ['lrd', 'Задняя левая дверь'], ['lr', 'Заднее левое крыло'],
+  ['rf', 'Переднее правое крыло'], ['rfd', 'Передняя правая дверь'], ['rrd', 'Задняя правая дверь'], ['rr', 'Заднее правое крыло']
+];
+const zoneName = id => (ZONES.find(z => z[0] === id) || [0, ''])[1];
+const CHECK = [
+  ['Кузов', [['b1', 'Вмятины на панелях'], ['b2', 'Сколы и царапины до металла'], ['b3', 'Зазоры дверей, капота, багажника'], ['b4', 'Коррозия и вздутия металла']]],
+  ['Лакокрасочное покрытие', [['p1', 'Совпадение оттенка по панелям'], ['p2', 'Шагрень, фактура лака'], ['p3', 'Пузыри и вспучивание'], ['p4', 'Равномерность блеска']]],
+  ['Следы ремонта', [['r1', 'Шпаклёвка (проверка магнитом)'], ['r2', 'Следы сварки, подкраска кромок'], ['r3', 'Замена деталей, чужие кромки'], ['r4', 'Напыл краски на резинках и пластике']]]
+];
+const CHECK_N = CHECK.reduce((a, g) => a + g[1].length, 0);
+const MARKS = [['ok', 'Норма'], ['warn', 'Внимание'], ['bad', 'Дефект']];
+const LIBRARY = [
+  ['Парковочная вмятина', 1, 'Плавная, без острых складок — обычно от соседней двери. Чаще на дверях и крыльях. Убирается быстрее всего.'],
+  ['Градовые вмятины', 2, 'Много мелких вмятин на капоте, крыше и багажнике. Каждая простая, но считают по количеству.'],
+  ['Крупная плавная вмятина', 3, 'Больше 7 см, металл вытянут. Нужно несколько проходов, время растёт заметно.'],
+  ['Вмятина на ребре жёсткости', 3, 'Линия кузова должна остаться ровной. Работа тоньше и дольше, чем на плоскости.'],
+  ['Вмятина с заломом', 3, 'Острая складка металла. После правки может остаться едва заметный след — клиента предупреждают заранее.'],
+  ['Вмятина на кромке панели', 3, 'У края двери или капота металл сложен вдвое, доступ инструментом ограничен.'],
+  ['Вмятина на алюминии', 3, 'Алюминий жёстче и хуже возвращает форму, чем сталь. Закладывают больше времени.'],
+  ['Стойка или рейлинг крыши', 4, 'Двойной металл и почти нет доступа изнутри. Самая трудоёмкая зона, работают в основном клеевой системой.'],
+  ['Повреждена краска', 0, 'Трещины, сколы или вздутия в месте удара. Без покраски такое не убрать — метод не подходит.']
+];
+const BRANDS = {
+  'Lada': 'Granta,Vesta,Niva Legend,Niva Travel,Largus,XRAY,Kalina,Priora,Aura,Iskra',
+  'Toyota': 'Camry,Corolla,RAV4,Land Cruiser 200,Land Cruiser 300,Land Cruiser Prado,Highlander,Fortuner,Hilux,C-HR,Alphard',
+  'Kia': 'Rio,Ceed,Cerato,K5,Optima,Sportage,Sorento,Seltos,Soul,Mohave,Carnival,Picanto',
+  'Hyundai': 'Solaris,Creta,Elantra,Sonata,Tucson,Santa Fe,Palisade,i30,Staria',
+  'Volkswagen': 'Polo,Jetta,Passat,Tiguan,Touareg,Golf,Taos,Teramont,Caravelle,Multivan',
+  'Skoda': 'Rapid,Octavia,Superb,Karoq,Kodiaq,Fabia,Yeti',
+  'BMW': '1 серии,2 серии,3 серии,4 серии,5 серии,7 серии,X1,X2,X3,X4,X5,X6,X7',
+  'Mercedes-Benz': 'A-Класс,C-Класс,E-Класс,S-Класс,CLA,CLS,GLA,GLB,GLC,GLE,GLS,G-Класс,V-Класс',
+  'Audi': 'A3,A4,A5,A6,A7,A8,Q3,Q5,Q7,Q8',
+  'Nissan': 'Almera,Qashqai,X-Trail,Murano,Terrano,Juke,Pathfinder,Patrol,Teana',
+  'Renault': 'Logan,Sandero,Duster,Kaptur,Arkana,Megane,Fluence,Koleos',
+  'Mazda': '3,6,CX-5,CX-7,CX-9,CX-30',
+  'Mitsubishi': 'Lancer,Outlander,ASX,Pajero,Pajero Sport,L200,Eclipse Cross',
+  'Honda': 'Civic,Accord,CR-V,Pilot,HR-V,Fit',
+  'Ford': 'Focus,Fiesta,Mondeo,Kuga,Explorer,EcoSport,Transit',
+  'Chevrolet': 'Cruze,Aveo,Lacetti,Niva,Captiva,Tahoe,Cobalt,Spark',
+  'Lexus': 'ES,IS,LS,NX,RX,GX,LX,UX',
+  'Subaru': 'Forester,Outback,XV,Impreza,Legacy',
+  'Volvo': 'S60,S90,XC40,XC60,XC90',
+  'Land Rover': 'Range Rover,Range Rover Sport,Range Rover Evoque,Range Rover Velar,Discovery,Discovery Sport,Defender',
+  'Porsche': 'Cayenne,Macan,Panamera,911,Taycan',
+  'Haval': 'Jolion,F7,F7x,H6,H9,Dargo,M6',
+  'Chery': 'Tiggo 4,Tiggo 7 Pro,Tiggo 7 Pro Max,Tiggo 8,Tiggo 8 Pro,Arrizo 8',
+  'Geely': 'Coolray,Atlas,Atlas Pro,Monjaro,Tugella,Emgrand,Okavango',
+  'Changan': 'CS35 Plus,CS55 Plus,CS75 Plus,UNI-K,UNI-T,UNI-V,Alsvin',
+  'Exeed': 'LX,TXL,VX,RX',
+  'Omoda': 'C5,S5',
+  'Jaecoo': 'J7,J8',
+  'Tank': '300,500,700',
+  'Li Auto': 'L6,L7,L8,L9',
+  'Zeekr': '001,009,X,7X',
+  'Moskvich': '3,6',
+  'UAZ': 'Patriot,Hunter,Pickup',
+  'GAZ': 'Газель Next,Соболь,Volga',
+  'Opel': 'Astra,Corsa,Insignia,Mokka,Zafira',
+  'Peugeot': '208,308,408,2008,3008,5008',
+  'Citroen': 'C3,C4,C5 Aircross,Berlingo',
+  'Suzuki': 'Vitara,SX4,Jimny,Swift',
+  'Infiniti': 'Q50,QX50,QX60,QX80,FX',
+  'Tesla': 'Model 3,Model S,Model X,Model Y'
+};
+
+/* ───────── данные и хранение ───────── */
+const LS = 'pdr:';
+const cloud = inTg && tg.isVersionAtLeast && tg.isVersionAtLeast('6.9') && tg.CloudStorage ? tg.CloudStorage : null;
+let S = JSON.parse(JSON.stringify(DEFAULTS));
+const DB = {orders: [], insps: [], cars: []};
+
+function lsAll() {
+  const out = {};
+  try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.indexOf(LS) === 0) out[k.slice(LS.length)] = localStorage.getItem(k); } } catch (e) {}
+  return out;
+}
+function lsReplace(map) {
+  try {
+    Object.keys(lsAll()).forEach(k => localStorage.removeItem(LS + k));
+    Object.keys(map).forEach(k => localStorage.setItem(LS + k, map[k]));
+  } catch (e) {}
+}
+function put(key, obj) {
+  const v = JSON.stringify(obj);
+  if (v.length > 4000) { toast('Запись слишком длинная — сократите комментарий'); return false; }
+  try { localStorage.setItem(LS + key, v); } catch (e) {}
+  if (cloud) cloud.setItem(key, v, err => { if (err) toast('Не удалось сохранить в облако Telegram'); });
+  return true;
+}
+function del(key) {
+  try { localStorage.removeItem(LS + key); } catch (e) {}
+  if (cloud) cloud.removeItem(key, () => {});
+}
+function applySettings(raw) {
+  const d = JSON.parse(JSON.stringify(DEFAULTS));
+  if (raw && typeof raw === 'object') {
+    if (typeof raw.name === 'string' && raw.name.trim()) d.name = raw.name.trim().slice(0, 40);
+    if (typeof raw.sub === 'string') d.sub = raw.sub.slice(0, 80);
+    d.sizes.forEach(s => { const r = (raw.sizes || []).find(x => x && x.id === s.id); if (r) { s.price = num(r.price); s.min = num(r.min); } });
+    d.locs.forEach(l => { const r = (raw.locs || []).find(x => x && x.id === l.id); if (r && num(r.k) > 0) l.k = num(r.k); });
+    if (num(raw.oldK) > 0) d.oldK = num(raw.oldK);
+    if (num(raw.round) > 0) d.round = num(raw.round);
+  }
+  S = d;
+  document.title = S.name;
+}
+function ingest(map) {
+  DB.orders = []; DB.insps = []; DB.cars = [];
+  applySettings(null);
+  Object.keys(map).forEach(k => {
+    let o; try { o = JSON.parse(map[k]); } catch (e) { return; }
+    if (!o || typeof o !== 'object') return;
+    if (k === 'settings') applySettings(o);
+    else if (k.indexOf('o_') === 0 && o.id) DB.orders.push(o);
+    else if (k.indexOf('i_') === 0 && o.id) DB.insps.push(o);
+    else if (k.indexOf('c_') === 0 && o.id) DB.cars.push(o);
+  });
+  const byT = (a, b) => (b.t || 0) - (a.t || 0);
+  DB.orders.sort(byT); DB.insps.sort(byT); DB.cars.sort(byT);
+}
+function loadCloud(done) {
+  cloud.getKeys((err, keys) => {
+    if (err || !Array.isArray(keys)) { done(); return; }
+    if (!keys.length) { // первый запуск в Telegram: поднимаем в облако то, что уже есть на устройстве
+      const local = lsAll();
+      Object.keys(local).forEach(k => cloud.setItem(k, local[k], () => {}));
+      done(); return;
+    }
+    const map = {}; let i = 0;
+    (function next() {
+      const part = keys.slice(i, i + 100); i += 100;
+      if (!part.length) { ingest(map); lsReplace(map); done(); return; }
+      cloud.getItems(part, (e, vals) => { if (!e && vals) Object.assign(map, vals); next(); });
+    })();
+  });
+}
+
+/* ───────── черновики ───────── */
+const carFields = c => ({carId: c && c.id || '', brand: c && c.brand || '', model: c && c.model || '', year: c && c.year || '', plate: c && c.plate || '', client: c && c.client || '', phone: c && c.phone || ''});
+const newDent = z => ({s: S.sizes[0].id, l: S.locs[0].id, q: 1, z: z || ''});
+const newDraft = c => ({car: carFields(c), paint: 'fresh', dents: [newDent()], comment: ''});
+const newIDraft = c => ({car: carFields(c), marks: {}, comment: ''});
+let draft, idraft, cdraft = null, hfilter = 'all', carQ = '';
+
+function calcDent(d, paint) {
+  const s = S.sizes.find(x => x.id === d.s) || S.sizes[0], l = S.locs.find(x => x.id === d.l) || S.locs[0];
+  const r = S.round || 100, q = d.q || 1;
+  return {p: Math.round(s.price * l.k * (paint === 'old' ? S.oldK : 1) * q / r) * r, m: Math.round(s.min * l.k * q / 5) * 5, size: s.label, loc: l.label};
+}
+function calcTotal() {
+  return draft.dents.reduce((a, d) => { const c = calcDent(d, draft.paint); a.p += c.p; a.m += c.m; return a; }, {p: 0, m: 0});
+}
+const carTitle = c => [c.brand, c.model, c.year].filter(Boolean).join(' ') || 'Автомобиль без названия';
+const normPlate = p => String(p || '').toUpperCase().replace(/\s+/g, '');
+
+function upsertCar(c) {
+  const plate = normPlate(c.plate);
+  let car = (c.carId && DB.cars.find(x => x.id === c.carId)) ||
+    (plate && DB.cars.find(x => normPlate(x.plate) === plate)) ||
+    (!plate && c.brand && DB.cars.find(x => !x.plate && x.brand === c.brand && x.model === c.model && (x.client || '') === (c.client || '')));
+  if (car) {
+    ['brand', 'model', 'year', 'plate', 'client', 'phone'].forEach(f => { if (c[f]) car[f] = c[f]; });
+  } else {
+    car = {id: uid(), t: Date.now(), brand: c.brand, model: c.model, year: c.year, plate: c.plate, client: c.client, phone: c.phone, note: ''};
+    DB.cars.unshift(car);
+  }
+  put('c_' + car.id, car);
+  return car.id;
+}
+
+/* ───────── мелочи интерфейса ───────── */
+let toastT;
+function toast(msg) { const el = $('#toast'); el.textContent = msg; el.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('show'), 2200); }
+function buzz(kind) { try { if (inTg && tg.HapticFeedback) kind ? tg.HapticFeedback.notificationOccurred(kind) : tg.HapticFeedback.selectionChanged(); } catch (e) {} }
+function ask(msg, cb) {
+  if (inTg && tg.showConfirm && tg.isVersionAtLeast('6.2')) tg.showConfirm(msg, ok => { if (ok) cb(); });
+  else if (window.confirm(msg)) cb();
+}
+function copy(text, okMsg) {
+  const done = () => toast(okMsg || 'Скопировано');
+  const fallback = () => { const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); done(); } catch (e) { toast('Не удалось скопировать'); } ta.remove(); };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fallback); else fallback();
+}
+function go(h) { if (location.hash === h) render(); else location.hash = h; }
+function fillModels(brand) {
+  const key = Object.keys(BRANDS).find(b => b.toLowerCase() === String(brand || '').trim().toLowerCase());
+  $('#dl-models').innerHTML = key ? BRANDS[key].split(',').map(m => `<option value="${esc(m)}">`).join('') : '';
+}
+
+/* ───────── части форм ───────── */
+function carForm(scope, c) {
+  const f = (name, label, ph, extra) => `<label for="${scope}-${name}">${label}</label><input id="${scope}-${name}" data-s="${scope}" data-f="${name}" value="${esc(c[name])}" placeholder="${ph}" ${extra || ''} autocomplete="off">`;
+  return f('brand', 'Марка', 'Начните вводить, например Kia', 'list="dl-brands"') +
+    f('model', 'Модель', 'Например Sportage', 'list="dl-models"') +
+    `<div class="grid2"><div>${f('year', 'Год выпуска', '2021', 'inputmode="numeric" maxlength="4"')}</div><div>${f('plate', 'Гос. номер', 'А123АА77', 'maxlength="12"')}</div></div>` +
+    f('client', 'Клиент', 'Имя клиента', 'maxlength="60"') +
+    f('phone', 'Телефон', '+7 900 000-00-00', 'type="tel" inputmode="tel" maxlength="20"');
+}
+const zoneOptions = z => `<option value="">Не указана</option>` + ZONES.map(x => `<option value="${x[0]}" ${z === x[0] ? 'selected' : ''}>${x[1]}</option>`).join('');
+function dentCard(d, i) {
+  const c = calcDent(d, draft.paint);
+  return `<div class="card">
+    <div class="row between"><b>Вмятина ${i + 1}</b>${draft.dents.length > 1 ? `<button class="link bad" data-act="dent-del" data-i="${i}">Убрать</button>` : ''}</div>
+    <div class="lbl">Размер</div>
+    <div class="chips">${S.sizes.map(s => `<button class="chip ${d.s === s.id ? 'on' : ''}" data-act="dent-size" data-i="${i}" data-v="${s.id}">${esc(s.label)}</button>`).join('')}</div>
+    <label for="dz${i}">Деталь кузова</label><select id="dz${i}" data-chg="dent-zone" data-i="${i}">${zoneOptions(d.z)}</select>
+    <label for="dl${i}">Расположение</label><select id="dl${i}" data-chg="dent-loc" data-i="${i}">${S.locs.map(l => `<option value="${l.id}" ${d.l === l.id ? 'selected' : ''}>${esc(l.label)}</option>`).join('')}</select>
+    <div class="lbl">Количество</div>
+    <div class="stepper"><button data-act="dent-qty" data-i="${i}" data-v="-1" aria-label="Меньше">−</button><span>${d.q}</span><button data-act="dent-qty" data-i="${i}" data-v="1" aria-label="Больше">+</button></div>
+    <div class="row between sum"><span class="muted">${dur(c.m)}</span><b>${rub(c.p)}</b></div>
+  </div>`;
+}
+const orderRow = o => `<a class="item" href="#/order/${o.id}"><div class="row between"><b>${esc(carTitle(o.car))}</b><span class="badge ${o.status === 'done' ? 'done' : 'new'}">${o.status === 'done' ? 'Выполнен' : 'Новый'}</span></div>
+  <div class="row between"><span class="muted">${esc([o.car.plate, o.client].filter(Boolean).join(' · ') || dt(o.t))}</span><b>${rub(o.total)}</b></div></a>`;
+function inspCount(m) { const c = {ok: 0, warn: 0, bad: 0}; Object.keys(m || {}).forEach(k => { if (c[m[k]] != null) c[m[k]]++; }); c.all = c.ok + c.warn + c.bad; return c; }
+const inspRow = x => { const c = inspCount(x.marks); return `<a class="item" href="#/insp/${x.id}"><div class="row between"><b>${esc(carTitle(x.car))}</b><span class="dots"><i class="ok">${c.ok}</i><i class="warn">${c.warn}</i><i class="bad">${c.bad}</i></span></div>
+  <span class="muted">${esc([x.car.plate, dt(x.t)].filter(Boolean).join(' · '))}</span></a>`; };
+const carRow = c => `<a class="item" href="#/car/${c.id}"><b>${esc(carTitle(c))}</b><span class="muted">${esc([c.plate, c.client, c.phone].filter(Boolean).join(' · ') || 'Без номера и клиента')}</span></a>`;
+const back = (h, t) => `<a class="link back" href="${h}">‹ ${t}</a>`;
+
+/* ───────── экраны ───────── */
+const V = {};
+V.home = () => {
+  const n = DB.orders.length, sum = DB.orders.reduce((a, o) => a + (o.total || 0), 0), mins = DB.orders.reduce((a, o) => a + (o.min || 0), 0);
+  const st = (l, v) => `<div class="stat"><span>${l}</span><b>${v}</b></div>`;
+  const sec = (h, t, d) => `<a class="item" href="${h}"><b>${t}</b><span class="muted">${d}</span></a>`;
+  return `<h1>${esc(S.name)}</h1><p class="sub">${esc(S.sub)}</p>
+  <button class="btn" data-act="new-calc">Новый расчёт</button>
+  <div class="cap">Показатели</div>
+  <div class="grid2">${st('Создано заказов', n)}${st('Выполнено', DB.orders.filter(o => o.status === 'done').length)}${st('Автомобилей в базе', DB.cars.length)}${st('Сумма заказов', rub(sum))}${st('Средняя стоимость', n ? rub(sum / n) : '—')}${st('Среднее время работ', n ? dur(mins / n) : '—')}</div>
+  <div class="cap">Разделы</div>
+  ${sec('#/calc', 'Расчёт стоимости', 'Цена и время удаления вмятин')}
+  ${sec('#/map', 'Карта повреждений', 'Отметить вмятины на схеме кузова')}
+  ${sec('#/inspect', 'Осмотр автомобиля', 'Кузов, краска и следы ремонта')}
+  ${sec('#/library', 'Библиотека повреждений', 'Виды вмятин и их сложность')}
+  ${sec('#/history', 'История заказов', 'Заказы, статусы и сметы')}
+  ${sec('#/cars', 'База автомобилей', 'Сохранённые машины и клиенты')}
+  ${sec('#/settings', 'Настройки и прайс', 'Цены, коэффициенты, название')}
+  <div class="cap">Последние расчёты</div>
+  ${DB.orders.slice(0, 3).map(orderRow).join('') || '<div class="empty">Расчётов пока нет</div>'}
+  <div class="cap">Последние осмотры</div>
+  ${DB.insps.slice(0, 3).map(inspRow).join('') || '<div class="empty">Осмотров пока нет</div>'}`;
+};
+V.calc = () => {
+  const t = calcTotal();
+  return `<h1>Расчёт стоимости</h1><p class="sub">Сумма ориентировочная, точная — после осмотра.</p>
+  <div class="card"><div class="cap">Автомобиль и клиент</div>${carForm('calc', draft.car)}</div>
+  <div class="card"><div class="cap">Состояние краски</div>
+    <div class="seg"><button class="${draft.paint === 'fresh' ? 'on' : ''}" data-act="paint" data-v="fresh">Заводская</button><button class="${draft.paint === 'old' ? 'on' : ''}" data-act="paint" data-v="old">Старая или перекрас</button></div>
+    <p class="muted small" style="margin:10px 0 0">Метод работает, только пока краска цела. Трещины, сколы или вздутия в месте удара — нужна покраска.</p></div>
+  <div class="row between"><div class="cap" style="margin:10px 0">Вмятины</div><a class="link" href="#/map">Отметить на схеме</a></div>
+  ${draft.dents.map(dentCard).join('')}
+  <button class="btn ghost" data-act="dent-add" style="margin-bottom:12px">+ Добавить вмятину</button>
+  <div class="card"><label for="calc-comment">Комментарий</label><textarea id="calc-comment" data-s="calcroot" data-f="comment" maxlength="500" placeholder="Например: град, машина с пробегом, клиент торопится">${esc(draft.comment)}</textarea>
+    <div class="row between total" style="margin:16px 0"><div><span class="muted small">Итого, ориентировочно</span><b>${rub(t.p)}</b></div><div class="t" style="text-align:right"><span class="muted small">Время работ</span><b>${dur(t.m)}</b></div></div>
+    <button class="btn" data-act="save-order">Сохранить расчёт</button></div>`;
+};
+V.map = () => {
+  const cnt = {}; draft.dents.forEach(d => { if (d.z) cnt[d.z] = (cnt[d.z] || 0) + d.q; });
+  const zr = (id, x, y, w, h, lines) => {
+    const cx = x + w / 2, cy = y + h / 2, n = cnt[id];
+    return `<rect class="z ${n ? 'on' : ''}" data-act="zone" data-v="${id}" x="${x}" y="${y}" width="${w}" height="${h}" rx="14"/>` +
+      lines.map((l, i) => `<text x="${cx}" y="${cy + 3 + (i - (lines.length - 1) / 2) * 12}">${l}</text>`).join('') +
+      (n ? `<circle class="n" cx="${x + w - 12}" cy="${y + 12}" r="9" pointer-events="none"/><text class="nt" x="${x + w - 12}" y="${y + 16}">${n}</text>` : '');
+  };
+  const marked = draft.dents.map((d, i) => d.z ? `<div class="kv"><span>${zoneName(d.z)} × ${d.q}</span><span><button class="link bad" style="padding:0" data-act="dent-del" data-i="${i}">Убрать</button></span></div>` : '').join('');
+  return `${back('#/calc', 'К расчёту')}<h1>Карта повреждений</h1><p class="sub">Нажмите на деталь — вмятина добавится в расчёт.</p>
+  <div class="card"><svg class="car" viewBox="0 0 320 400" role="img" aria-label="Схема кузова, вид сверху в развёртке">
+    <text x="160" y="14">ПЕРЕД</text>
+    ${zr('hood', 108, 24, 104, 96, ['Капот'])}${zr('roof', 108, 132, 104, 136, ['Крыша'])}${zr('trunk', 108, 280, 104, 84, ['Крышка', 'багажника'])}
+    ${zr('lf', 16, 30, 80, 84, ['Крыло', 'переднее'])}${zr('lfd', 16, 126, 80, 68, ['Дверь', 'передняя'])}${zr('lrd', 16, 206, 80, 68, ['Дверь', 'задняя'])}${zr('lr', 16, 286, 80, 78, ['Крыло', 'заднее'])}
+    ${zr('rf', 224, 30, 80, 84, ['Крыло', 'переднее'])}${zr('rfd', 224, 126, 80, 68, ['Дверь', 'передняя'])}${zr('rrd', 224, 206, 80, 68, ['Дверь', 'задняя'])}${zr('rr', 224, 286, 80, 78, ['Крыло', 'заднее'])}
+    <text x="56" y="384">ЛЕВЫЙ БОРТ</text><text x="160" y="384">ЗАД</text><text x="264" y="384">ПРАВЫЙ БОРТ</text>
+  </svg></div>
+  ${marked ? `<div class="card"><div class="cap">Отмечено</div>${marked}</div>` : ''}
+  <a class="btn" href="#/calc" style="display:flex;align-items:center;justify-content:center;text-decoration:none">Перейти к расчёту</a>`;
+};
+V.inspect = () => {
+  const c = inspCount(idraft.marks);
+  return `<h1>Осмотр автомобиля</h1><p class="sub">Чек-лист из ${CHECK_N} пунктов перед работой.</p>
+  <div class="card"><div class="cap">Автомобиль</div>${carForm('insp', idraft.car)}</div>
+  ${CHECK.map(g => `<div class="card"><div class="cap">${g[0]}</div>${g[1].map(it => `<div class="chk"><span>${it[1]}</span><div class="seg">${MARKS.map(m => `<button class="${idraft.marks[it[0]] === m[0] ? 'on ' + m[0] : ''}" data-act="mark" data-k="${it[0]}" data-v="${m[0]}">${m[1]}</button>`).join('')}</div></div>`).join('')}</div>`).join('')}
+  <div class="card"><div class="row between"><div><span class="muted small">Проверено пунктов</span><div style="font-size:22px;font-weight:700">${c.all} из ${CHECK_N}</div></div><span class="dots"><i class="ok">${c.ok}</i><i class="warn">${c.warn}</i><i class="bad">${c.bad}</i></span></div>
+    <label for="insp-comment">Комментарий мастера</label><textarea id="insp-comment" data-s="insproot" data-f="comment" maxlength="500" placeholder="Что заметили при осмотре">${esc(idraft.comment)}</textarea>
+    <button class="btn" data-act="save-insp" style="margin-top:14px">Сохранить осмотр</button></div>`;
+};
+V.library = () => `${back('#/home', 'Главная')}<h1>Библиотека повреждений</h1><p class="sub">Виды вмятин и насколько они сложны в работе.</p>
+  ${LIBRARY.map(x => `<div class="card"><div class="row between" style="margin-bottom:6px"><b>${x[0]}</b>${x[1] ? `<span class="lvl" aria-label="Сложность ${x[1]} из 4">${[1, 2, 3, 4].map(i => `<i class="${i <= x[1] ? 'on' : ''}"></i>`).join('')}</span>` : '<span class="badge bad">Не подходит</span>'}</div><span class="muted" style="font-size:15px">${x[2]}</span></div>`).join('')}`;
+function carList() {
+  const q = carQ.trim().toLowerCase();
+  const list = q ? DB.cars.filter(c => [c.brand, c.model, c.plate, c.client, c.phone].join(' ').toLowerCase().indexOf(q) >= 0) : DB.cars;
+  return list.map(carRow).join('') || `<div class="empty">${DB.cars.length ? 'Ничего не нашлось' : 'Сохранённых автомобилей пока нет.<br>Добавьте первый.'}</div>`;
+}
+V.cars = () => `<div class="row between" style="margin-bottom:12px"><h1 style="margin:0">База автомобилей</h1><a class="btn sm" href="#/car/new" style="display:flex;align-items:center;text-decoration:none">+ Автомобиль</a></div>
+  <label for="car-q" style="margin-top:0">Поиск по марке, модели, номеру или клиенту</label><input id="car-q" data-s="carq" value="${esc(carQ)}" placeholder="Например: Toyota или А123" autocomplete="off">
+  <div id="carlist" style="margin-top:12px">${carList()}</div>`;
+V.carnew = () => { if (!cdraft) cdraft = Object.assign(carFields(), {note: ''});
+  return `${back('#/cars', 'База автомобилей')}<h1>Новый автомобиль</h1>
+  <div class="card">${carForm('car', cdraft)}<label for="car-note">Заметка</label><textarea id="car-note" data-s="car" data-f="note" maxlength="300" placeholder="Например: постоянный клиент">${esc(cdraft.note)}</textarea></div>
+  <button class="btn" data-act="save-car">Сохранить</button>`; };
+V.car = id => { const c = DB.cars.find(x => x.id === id); if (!c) return V.missing();
+  const os = DB.orders.filter(o => o.carId === id), is = DB.insps.filter(o => o.carId === id);
+  const kv = (k, v) => v ? `<div class="kv"><span>${k}</span><span>${esc(v)}</span></div>` : '';
+  return `${back('#/cars', 'База автомобилей')}<h1>${esc(carTitle(c))}</h1>
+  <div class="card">${kv('Гос. номер', c.plate) + kv('Клиент', c.client) + kv('Телефон', c.phone) + kv('Заметка', c.note) + kv('Добавлен', dt(c.t))}</div>
+  <div class="grid2"><button class="btn" data-act="car-calc" data-id="${id}">Новый расчёт</button><button class="btn ghost" data-act="car-insp" data-id="${id}">Осмотр</button></div>
+  <div class="cap">Заказы</div>${os.map(orderRow).join('') || '<div class="empty">Заказов пока нет</div>'}
+  <div class="cap">Осмотры</div>${is.map(inspRow).join('') || '<div class="empty">Осмотров пока нет</div>'}
+  <button class="btn danger" data-act="del-car" data-id="${id}" style="margin-top:14px">Удалить автомобиль</button>`; };
+V.history = () => {
+  const list = DB.orders.filter(o => hfilter === 'all' || (hfilter === 'done') === (o.status === 'done'));
+  const tab = (v, t) => `<button class="${hfilter === v ? 'on' : ''}" data-act="hfilter" data-v="${v}">${t}</button>`;
+  return `<h1>История заказов</h1><div class="seg" style="margin:12px 0">${tab('all', 'Все')}${tab('new', 'Новые')}${tab('done', 'Выполнены')}</div>
+  ${list.map(orderRow).join('') || `<div class="empty">${DB.orders.length ? 'В этом списке пусто' : 'Заказов пока нет. <a class="link" href="#/calc">Сделайте первый расчёт</a>'}</div>`}`;
+};
+function estimateText(o) {
+  const lines = [`Смета · ${S.name}`, dt(o.t), '', carTitle(o.car) + (o.car.plate ? ', ' + o.car.plate : '')];
+  if (o.client) lines.push('Клиент: ' + o.client + (o.phone ? ', ' + o.phone : ''));
+  lines.push('');
+  o.dents.forEach((d, i) => lines.push(`${i + 1}. ${[zoneName(d.z), d.size, (d.loc || '').toLowerCase()].filter(Boolean).join(' · ')} × ${d.q} — ${rub(d.p)}`));
+  lines.push('', 'Итого: ' + rub(o.total), 'Время работ: ' + dur(o.min));
+  if (o.comment) lines.push('Комментарий: ' + o.comment);
+  lines.push('', 'Расчёт ориентировочный, точная стоимость — после осмотра.');
+  return lines.join('\n');
+}
+V.order = id => { const o = DB.orders.find(x => x.id === id); if (!o) return V.missing();
+  const kv = (k, v) => v ? `<div class="kv"><span>${k}</span><span>${esc(v)}</span></div>` : '';
+  return `${back('#/history', 'История заказов')}<div class="row between"><h1 style="margin:0">${esc(carTitle(o.car))}</h1><span class="badge ${o.status === 'done' ? 'done' : 'new'}">${o.status === 'done' ? 'Выполнен' : 'Новый'}</span></div><p class="sub">${dt(o.t)}</p>
+  <div class="card">${kv('Гос. номер', o.car.plate) + kv('Клиент', o.client) + kv('Телефон', o.phone) + kv('Краска', o.paint === 'old' ? 'Старая или перекрас' : 'Заводская') + kv('Комментарий', o.comment)}</div>
+  <div class="card"><div class="cap">Вмятины</div>${o.dents.map((d, i) => `<div class="kv"><span>${i + 1}. ${esc([zoneName(d.z), d.size, d.loc].filter(Boolean).join(' · '))} × ${d.q}</span><span>${rub(d.p)}</span></div>`).join('')}
+    <div class="row between total sum"><div><span class="muted small">Итого</span><b>${rub(o.total)}</b></div><div class="t" style="text-align:right"><span class="muted small">Время работ</span><b>${dur(o.min)}</b></div></div></div>
+  <button class="btn" data-act="toggle-done" data-id="${id}">${o.status === 'done' ? 'Вернуть в новые' : 'Отметить выполненным'}</button>
+  <button class="btn ghost" data-act="copy-est" data-id="${id}" style="margin-top:10px">Скопировать смету для клиента</button>
+  <button class="btn danger" data-act="del-order" data-id="${id}" style="margin-top:10px">Удалить заказ</button>`; };
+V.insp = id => { const x = DB.insps.find(i => i.id === id); if (!x) return V.missing();
+  const c = inspCount(x.marks), name = {ok: 'Норма', warn: 'Внимание', bad: 'Дефект'};
+  return `${back('#/home', 'Главная')}<h1>${esc(carTitle(x.car))}</h1><p class="sub">Осмотр · ${dt(x.t)}${x.car.plate ? ' · ' + esc(x.car.plate) : ''}</p>
+  <div class="card"><div class="row between"><b>Проверено ${c.all} из ${CHECK_N}</b><span class="dots"><i class="ok">${c.ok}</i><i class="warn">${c.warn}</i><i class="bad">${c.bad}</i></span></div>${x.client ? `<p class="muted" style="margin:8px 0 0">${esc([x.client, x.phone].filter(Boolean).join(' · '))}</p>` : ''}</div>
+  ${CHECK.map(g => `<div class="card"><div class="cap">${g[0]}</div>${g[1].map(it => { const m = x.marks[it[0]]; return `<div class="kv"><span style="color:var(--text)">${it[1]}</span><span class="dots"><i class="${m || ''}">${m ? name[m] : '—'}</i></span></div>`; }).join('')}</div>`).join('')}
+  ${x.comment ? `<div class="card"><div class="cap">Комментарий мастера</div>${esc(x.comment)}</div>` : ''}
+  <button class="btn danger" data-act="del-insp" data-id="${id}">Удалить осмотр</button>`; };
+V.settings = () => `${back('#/home', 'Главная')}<h1>Настройки и прайс</h1><p class="sub">Изменения сохраняются сразу.</p>
+  <div class="card"><div class="cap">Название</div><label for="set-name">Название приложения</label><input id="set-name" data-set="name" value="${esc(S.name)}" maxlength="40">
+    <label for="set-sub">Подзаголовок</label><input id="set-sub" data-set="sub" value="${esc(S.sub)}" maxlength="80"></div>
+  <div class="card"><div class="cap">Цена и время за одну вмятину</div><div class="set muted small"><span>Размер</span><span style="text-align:right">Цена, ₽</span><span style="text-align:right">Минут</span></div>
+    ${S.sizes.map((s, i) => `<div class="set"><span>${esc(s.label)}</span><input inputmode="numeric" data-set="sizes.${i}.price" value="${s.price}" aria-label="Цена, ${esc(s.label)}"><input inputmode="numeric" data-set="sizes.${i}.min" value="${s.min}" aria-label="Минут, ${esc(s.label)}"></div>`).join('')}</div>
+  <div class="card"><div class="cap">Коэффициенты за расположение</div><p class="muted small" style="margin:0 0 10px">Цена и время умножаются на это число. 1 — без наценки.</p>
+    ${S.locs.map((l, i) => `<div class="set two"><span>${esc(l.label)}</span><input inputmode="decimal" data-set="locs.${i}.k" value="${l.k}" aria-label="Коэффициент, ${esc(l.label)}"></div>`).join('')}
+    <div class="set two" style="margin-top:14px"><span>Старая краска или перекрас (только цена)</span><input inputmode="decimal" data-set="oldK" value="${S.oldK}" aria-label="Коэффициент за старую краску"></div>
+    <div class="set two"><span>Округлять цену до, ₽</span><input inputmode="numeric" data-set="round" value="${S.round}" aria-label="Шаг округления"></div></div>
+  <div class="card"><div class="cap">Резервная копия</div><p class="muted small" style="margin:0 0 10px">${cloud ? 'Данные хранятся в облаке Telegram и видны на всех ваших устройствах.' : 'Сейчас данные хранятся только в этом браузере.'} Копию можно сохранить в «Избранное».</p>
+    <button class="btn ghost" data-act="export">Скопировать все данные</button>
+    <label for="imp">Восстановить из копии</label><textarea id="imp" placeholder="Вставьте сюда скопированные данные"></textarea>
+    <button class="btn ghost" data-act="import" style="margin-top:10px">Восстановить</button></div>`;
+V.missing = () => `${back('#/home', 'Главная')}<div class="empty">Запись не найдена — возможно, её удалили.</div>`;
+
+/* ───────── маршруты ───────── */
+const TABS = [
+  ['home', 'Главная', '<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>'],
+  ['calc', 'Расчёт', '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h3"/>'],
+  ['inspect', 'Осмотр', '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8.5 12l2.5 2.5 4.5-5"/>'],
+  ['cars', 'Авто', '<path d="M4 16v-3l2-5h12l2 5v3M4 16h16M4 16v2m16-2v2"/><circle cx="8" cy="13" r=".6"/><circle cx="16" cy="13" r=".6"/>'],
+  ['history', 'История', '<path d="M4 7h16M4 12h16M4 17h10"/>']
+];
+const TAB_OF = {home: 'home', library: 'home', settings: 'home', insp: 'home', calc: 'calc', map: 'calc', inspect: 'inspect', cars: 'cars', car: 'cars', history: 'history', order: 'history'};
+function route() { const p = location.hash.replace(/^#\/?/, '').split('/'); return {name: p[0] || 'home', id: p[1] || ''}; }
+function render() {
+  const r = route(); let html;
+  if (r.name === 'car') html = r.id === 'new' ? V.carnew() : V.car(r.id);
+  else if (r.name === 'order') html = V.order(r.id);
+  else if (r.name === 'insp') html = V.insp(r.id);
+  else html = (V[r.name] && r.name !== 'missing' ? V[r.name] : V.home)();
+  $('#app').innerHTML = html;
+  const tab = TAB_OF[r.name] || 'home';
+  $('#nav').innerHTML = TABS.map(t => `<a href="#/${t[0]}" class="${t[0] === tab ? 'on' : ''}"><svg viewBox="0 0 24 24" aria-hidden="true">${t[2]}</svg>${t[1]}</a>`).join('');
+  if (r.name === 'calc') fillModels(draft.car.brand); else if (r.name === 'inspect') fillModels(idraft.car.brand); else if (r.name === 'car') fillModels(cdraft && cdraft.brand);
+  if (inTg && tg.BackButton) { try { TABS.some(t => t[0] === r.name) ? tg.BackButton.hide() : tg.BackButton.show(); } catch (e) {} }
+}
+window.addEventListener('hashchange', () => { render(); window.scrollTo(0, 0); });
+
+/* ───────── действия ───────── */
+const A = {
+  'new-calc'() { draft = newDraft(); go('#/calc'); },
+  paint(el) { draft.paint = el.dataset.v; render(); },
+  'dent-add'() { if (draft.dents.length >= 20) { toast('Не больше 20 позиций в одном расчёте'); return; } draft.dents.push(newDent()); render(); },
+  'dent-del'(el) { draft.dents.splice(+el.dataset.i, 1); if (!draft.dents.length) draft.dents.push(newDent()); render(); },
+  'dent-size'(el) { draft.dents[+el.dataset.i].s = el.dataset.v; render(); },
+  'dent-qty'(el) { const d = draft.dents[+el.dataset.i]; d.q = Math.min(99, Math.max(1, d.q + (+el.dataset.v))); render(); },
+  zone(el) { const z = el.dataset.v, free = draft.dents.find(d => !d.z);
+    if (free) free.z = z; else if (draft.dents.length < 20) draft.dents.push(newDent(z)); else { toast('Не больше 20 позиций в одном расчёте'); return; }
+    render(); },
+  'save-order'() {
+    const c = draft.car; if (!(c.brand || c.plate || c.client)) { toast('Укажите марку, номер или клиента'); return; }
+    const t = calcTotal(), carId = upsertCar(c);
+    const o = {id: uid(), t: Date.now(), carId, car: {brand: c.brand, model: c.model, year: c.year, plate: c.plate}, client: c.client, phone: c.phone, paint: draft.paint,
+      dents: draft.dents.map(d => { const x = calcDent(d, draft.paint); return {s: d.s, l: d.l, z: d.z, q: d.q, p: x.p, m: x.m, size: x.size, loc: x.loc}; }),
+      comment: draft.comment.trim(), total: t.p, min: t.m, status: 'new'};
+    if (!put('o_' + o.id, o)) return;
+    DB.orders.unshift(o); draft = newDraft(); buzz('success'); toast('Расчёт сохранён'); go('#/order/' + o.id);
+  },
+  mark(el) { const k = el.dataset.k, v = el.dataset.v; if (idraft.marks[k] === v) delete idraft.marks[k]; else idraft.marks[k] = v; render(); },
+  'save-insp'() {
+    const c = idraft.car; if (!(c.brand || c.plate || c.client)) { toast('Укажите марку, номер или клиента'); return; }
+    if (!Object.keys(idraft.marks).length) { toast('Отметьте хотя бы один пункт'); return; }
+    const carId = upsertCar(c);
+    const x = {id: uid(), t: Date.now(), carId, car: {brand: c.brand, model: c.model, year: c.year, plate: c.plate}, client: c.client, phone: c.phone, marks: idraft.marks, comment: idraft.comment.trim()};
+    if (!put('i_' + x.id, x)) return;
+    DB.insps.unshift(x); idraft = newIDraft(); buzz('success'); toast('Осмотр сохранён'); go('#/insp/' + x.id);
+  },
+  'save-car'() {
+    if (!(cdraft.brand || cdraft.plate)) { toast('Укажите марку или гос. номер'); return; }
+    const c = {id: uid(), t: Date.now(), brand: cdraft.brand, model: cdraft.model, year: cdraft.year, plate: cdraft.plate, client: cdraft.client, phone: cdraft.phone, note: (cdraft.note || '').trim()};
+    if (!put('c_' + c.id, c)) return;
+    DB.cars.unshift(c); cdraft = null; buzz('success'); toast('Автомобиль сохранён'); go('#/car/' + c.id);
+  },
+  'car-calc'(el) { draft = newDraft(DB.cars.find(c => c.id === el.dataset.id)); go('#/calc'); },
+  'car-insp'(el) { idraft = newIDraft(DB.cars.find(c => c.id === el.dataset.id)); go('#/inspect'); },
+  'del-car'(el) { ask('Удалить автомобиль из базы? Его заказы и осмотры останутся в истории.', () => { const id = el.dataset.id; DB.cars = DB.cars.filter(c => c.id !== id); del('c_' + id); go('#/cars'); }); },
+  hfilter(el) { hfilter = el.dataset.v; render(); },
+  'toggle-done'(el) { const o = DB.orders.find(x => x.id === el.dataset.id); if (!o) return; o.status = o.status === 'done' ? 'new' : 'done'; o.doneAt = o.status === 'done' ? Date.now() : 0; put('o_' + o.id, o); buzz('success'); render(); },
+  'copy-est'(el) { const o = DB.orders.find(x => x.id === el.dataset.id); if (o) copy(estimateText(o), 'Смета скопирована'); },
+  'del-order'(el) { ask('Удалить заказ? Вернуть его будет нельзя.', () => { const id = el.dataset.id; DB.orders = DB.orders.filter(o => o.id !== id); del('o_' + id); go('#/history'); }); },
+  'del-insp'(el) { ask('Удалить осмотр? Вернуть его будет нельзя.', () => { const id = el.dataset.id; DB.insps = DB.insps.filter(o => o.id !== id); del('i_' + id); go('#/home'); }); },
+  export() { copy(JSON.stringify({app: 'pdr', v: 1, settings: S, orders: DB.orders, insps: DB.insps, cars: DB.cars}), 'Данные скопированы'); },
+  import() {
+    let d; try { d = JSON.parse($('#imp').value); } catch (e) { d = null; }
+    if (!d || d.app !== 'pdr') { toast('Это не похоже на копию данных'); return; }
+    ask('Добавить данные из копии к текущим? Записи с тем же номером будут заменены.', () => {
+      const map = lsAll(), add = (p, list) => (Array.isArray(list) ? list : []).forEach(o => { if (o && o.id && put(p + o.id, o)) map[p + o.id] = JSON.stringify(o); });
+      if (d.settings) { put('settings', d.settings); map.settings = JSON.stringify(d.settings); }
+      add('o_', d.orders); add('i_', d.insps); add('c_', d.cars);
+      ingest(map); toast('Данные восстановлены'); go('#/home');
+    });
+  }
+};
+document.addEventListener('click', e => { const el = e.target.closest('[data-act]'); if (!el || !A[el.dataset.act]) return; e.preventDefault(); buzz(); A[el.dataset.act](el); });
+document.addEventListener('change', e => {
+  const el = e.target;
+  if (el.dataset.chg === 'dent-zone') { draft.dents[+el.dataset.i].z = el.value; }
+  else if (el.dataset.chg === 'dent-loc') { draft.dents[+el.dataset.i].l = el.value; render(); }
+  else if (el.dataset.set) {
+    const path = el.dataset.set.split('.'); let o = S;
+    for (let i = 0; i < path.length - 1; i++) o = o[path[i]];
+    const key = path[path.length - 1];
+    o[key] = (key === 'name' || key === 'sub') ? el.value : num(el.value);
+    put('settings', S); applySettings(S); toast('Сохранено');
+  }
+});
+document.addEventListener('input', e => {
+  const el = e.target, s = el.dataset.s; if (!s) return;
+  if (s === 'carq') { carQ = el.value; $('#carlist').innerHTML = carList(); return; }
+  const target = {calc: draft.car, insp: idraft.car, car: cdraft, calcroot: draft, insproot: idraft}[s];
+  if (!target) return;
+  target[el.dataset.f] = el.dataset.f === 'plate' ? el.value.toUpperCase() : el.value;
+  if (el.dataset.f === 'brand') { fillModels(el.value); if (s !== 'car') target.carId = ''; }
+});
+
+/* ───────── запуск ───────── */
+$('#dl-brands').innerHTML = Object.keys(BRANDS).map(b => `<option value="${esc(b)}">`).join('');
+ingest(lsAll());
+draft = newDraft(); idraft = newIDraft();
+if (tg) { try { tg.ready(); tg.expand(); if (inTg) { tg.setHeaderColor('#0d131f'); tg.setBackgroundColor('#0d131f'); tg.BackButton.onClick(() => history.back()); } } catch (e) {} }
+render();
+if (cloud) loadCloud(() => { const a = document.activeElement; if (!a || !/INPUT|TEXTAREA|SELECT/.test(a.tagName)) render(); });
+</script>
+</body>
+</html>
