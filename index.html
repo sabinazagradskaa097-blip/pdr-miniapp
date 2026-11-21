@@ -49,6 +49,7 @@ select{background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),
   background-position:calc(100% - 20px) 20px,calc(100% - 14px) 20px;background-size:6px 6px;background-repeat:no-repeat;padding-right:36px}
 .chips{display:flex;flex-wrap:wrap;gap:8px}
 .chip{min-height:42px;padding:0 16px;border-radius:21px;border:1px solid var(--line);background:var(--bg);color:var(--text);font:inherit;font-size:15px;cursor:pointer}
+.chip.sm{min-height:38px;padding:0 13px;font-size:14px}
 .chip.on{border-color:var(--accent);background:rgba(79,209,181,.14);color:var(--accent);font-weight:600}
 .seg{display:flex;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--bg)}
 .seg button{flex:1;min-height:42px;border:0;border-right:1px solid var(--line);background:none;color:var(--muted);font:inherit;font-size:14px;cursor:pointer;padding:0 6px}
@@ -138,15 +139,19 @@ const DEFAULTS = {
     {id: 'edge', label: 'Кромка панели', k: 1.5},
     {id: 'pillar', label: 'Стойка или рейлинг крыши', k: 1.6},
     {id: 'alu', label: 'Алюминиевая панель', k: 1.5},
-    {id: 'hard', label: 'Труднодоступное место', k: 1.3}
+    {id: 'hard', label: 'Труднодоступное место', k: 1.3},
+    {id: 'stretch', label: 'Растянутый металл', add: 'stretch'},
+    {id: 'device', label: 'Работа прибором', add: 'device'}
   ],
+  extras: {film: 1500, hailPrice: 500, hailMin: 5, stretchS: 500, stretchL: 1000, device: 1000},
   oldK: 1.15,
   round: 100
 };
 const ZONES = [
   ['hood', 'Капот'], ['roof', 'Крыша'], ['trunk', 'Крышка багажника'],
   ['lf', 'Переднее левое крыло'], ['lfd', 'Передняя левая дверь'], ['lrd', 'Задняя левая дверь'], ['lr', 'Заднее левое крыло'],
-  ['rf', 'Переднее правое крыло'], ['rfd', 'Передняя правая дверь'], ['rrd', 'Задняя правая дверь'], ['rr', 'Заднее правое крыло']
+  ['rf', 'Переднее правое крыло'], ['rfd', 'Передняя правая дверь'], ['rrd', 'Задняя правая дверь'], ['rr', 'Заднее правое крыло'],
+  ['lp', 'Стойка крыши левая'], ['rp', 'Стойка крыши правая'], ['ls', 'Порог левый'], ['rs', 'Порог правый']
 ];
 const zoneName = id => (ZONES.find(z => z[0] === id) || [0, ''])[1];
 const CHECK = [
@@ -244,7 +249,8 @@ function applySettings(raw) {
     if (typeof raw.name === 'string' && raw.name.trim()) d.name = raw.name.trim().slice(0, 40);
     if (typeof raw.sub === 'string') d.sub = raw.sub.slice(0, 80);
     d.sizes.forEach(s => { const r = (raw.sizes || []).find(x => x && x.id === s.id); if (r) { s.price = num(r.price); s.min = num(r.min); } });
-    d.locs.forEach(l => { const r = (raw.locs || []).find(x => x && x.id === l.id); if (r && num(r.k) > 0) l.k = num(r.k); });
+    d.locs.forEach(l => { const r = (raw.locs || []).find(x => x && x.id === l.id); if (l.k != null && r && num(r.k) > 0) l.k = num(r.k); });
+    Object.keys(d.extras).forEach(k => { if (raw.extras && raw.extras[k] != null) d.extras[k] = num(raw.extras[k]); });
     if (num(raw.oldK) > 0) d.oldK = num(raw.oldK);
     if (num(raw.round) > 0) d.round = num(raw.round);
   }
@@ -284,18 +290,37 @@ function loadCloud(done) {
 
 /* ───────── черновики ───────── */
 const carFields = c => ({carId: c && c.id || '', brand: c && c.brand || '', model: c && c.model || '', year: c && c.year || '', plate: c && c.plate || '', client: c && c.client || '', phone: c && c.phone || ''});
-const newDent = z => ({s: S.sizes[0].id, l: S.locs[0].id, q: 1, z: z || ''});
-const newDraft = c => ({car: carFields(c), paint: 'fresh', dents: [newDent()], comment: ''});
+const newDent = z => ({s: S.sizes[0].id, ls: ['flat'], q: 1, z: z || ''});
+const newDraft = c => ({car: carFields(c), paint: 'fresh', dents: [newDent()], hail: {on: false, parts: {}, up: 0, down: 0}, film: true, arm: '', comment: ''});
 const newIDraft = c => ({car: carFields(c), marks: {}, comment: ''});
-let draft, idraft, cdraft = null, hfilter = 'all', carQ = '', locked = false;
+let draft, idraft, cdraft = null, hfilter = 'all', carQ = '', locked = false, mapMode = 'dent';
 
 function calcDent(d, paint) {
-  const s = S.sizes.find(x => x.id === d.s) || S.sizes[0], l = S.locs.find(x => x.id === d.l) || S.locs[0];
+  const si = Math.max(0, S.sizes.findIndex(x => x.id === d.s)), s = S.sizes[si];
+  const ls = (d.ls && d.ls.length ? d.ls : ['flat']).map(id => S.locs.find(x => x.id === id)).filter(Boolean);
+  let k = 1, add = 0;
+  ls.forEach(l => { if (l.add === 'stretch') add += si < 2 ? S.extras.stretchS : S.extras.stretchL; else if (l.add === 'device') add += S.extras.device; else k += l.k - 1; });
   const r = S.round || 100, q = d.q || 1;
-  return {p: Math.round(s.price * l.k * (paint === 'old' ? S.oldK : 1) * q / r) * r, m: Math.round(s.min * l.k * q / 5) * 5, size: s.label, loc: l.label};
+  return {p: Math.round((s.price * k * (paint === 'old' ? S.oldK : 1) + add) * q / r) * r, m: Math.round(s.min * k * q / 5) * 5, size: s.label, loc: ls.map(l => l.label).join(', ')};
+}
+function calcHail() {
+  const h = draft.hail, r = S.round || 100;
+  const n = h.on ? Object.keys(h.parts).reduce((a, z) => a + (h.parts[z] || 0), 0) : 0;
+  return {n, p: Math.round(S.extras.hailPrice * n * (1 + h.up / 100) * (1 - h.down / 100) / r) * r, m: Math.round(S.extras.hailMin * n / 5) * 5};
 }
 function calcTotal() {
-  return draft.dents.reduce((a, d) => { const c = calcDent(d, draft.paint); a.p += c.p; a.m += c.m; return a; }, {p: 0, m: 0});
+  const t = draft.dents.reduce((a, d) => { const c = calcDent(d, draft.paint); a.p += c.p; a.m += c.m; return a; }, {p: 0, m: 0});
+  const hail = calcHail(), film = draft.film ? S.extras.film : 0, arm = Math.round(num(draft.arm));
+  return {p: t.p + hail.p + film + arm, m: t.m + hail.m, hail, film, arm};
+}
+const dentsWord = n => { const a = n % 100, b = n % 10; return n + ' ' + (a > 10 && a < 20 ? 'вмятин' : b === 1 ? 'вмятина' : b > 1 && b < 5 ? 'вмятины' : 'вмятин'); };
+const hailNote = h => [h.up ? '+' + h.up + '% за сложность' : '', h.down ? '−' + h.down + '% за количество' : ''].filter(Boolean).join(', ');
+function extraRows(o) { // [название, сумма] для заказа и сметы
+  const rows = [];
+  if (o.hail && o.hail.n) rows.push(['Град: ' + dentsWord(o.hail.n) + (hailNote(o.hail) ? ' (' + hailNote(o.hail) + ')' : ''), o.hail.p]);
+  if (o.film) rows.push(['Защитная плёнка', o.film]);
+  if (o.arm) rows.push(['Арматурные работы', o.arm]);
+  return rows;
 }
 const carTitle = c => [c.brand, c.model, c.year].filter(Boolean).join(' ') || 'Автомобиль без названия';
 const normPlate = p => String(p || '').toUpperCase().replace(/\s+/g, '');
@@ -351,7 +376,8 @@ function dentCard(d, i) {
     <div class="lbl">Размер</div>
     <div class="chips">${S.sizes.map(s => `<button class="chip ${d.s === s.id ? 'on' : ''}" data-act="dent-size" data-i="${i}" data-v="${s.id}">${esc(s.label)}</button>`).join('')}</div>
     <label for="dz${i}">Деталь кузова</label><select id="dz${i}" data-chg="dent-zone" data-i="${i}">${zoneOptions(d.z)}</select>
-    <label for="dl${i}">Расположение</label><select id="dl${i}" data-chg="dent-loc" data-i="${i}">${S.locs.map(l => `<option value="${l.id}" ${d.l === l.id ? 'selected' : ''}>${esc(l.label)}</option>`).join('')}</select>
+    <div class="lbl">Расположение и сложность — можно несколько</div>
+    <div class="chips">${S.locs.map(l => `<button class="chip sm ${(d.ls || []).indexOf(l.id) >= 0 ? 'on' : ''}" data-act="dent-loc" data-i="${i}" data-v="${l.id}">${esc(l.label)}</button>`).join('')}</div>
     <div class="lbl">Количество</div>
     <div class="stepper"><button data-act="dent-qty" data-i="${i}" data-v="-1" aria-label="Меньше">−</button><span>${d.q}</span><button data-act="dent-qty" data-i="${i}" data-v="1" aria-label="Больше">+</button></div>
     <div class="row between sum"><span class="muted">${dur(c.m)}</span><b>${rub(c.p)}</b></div>
@@ -389,37 +415,57 @@ V.home = () => {
   ${DB.insps.slice(0, 3).map(inspRow).join('') || '<div class="empty">Осмотров пока нет</div>'}`;
 };
 V.calc = () => {
-  const t = calcTotal();
-  return `<h1>Расчёт стоимости</h1><p class="sub">Сумма ориентировочная, точная — после осмотра.</p>
+  const t = calcTotal(), h = draft.hail, pc = [0, 10, 20, 30];
+  const parts = ZONES.filter(z => h.parts[z[0]]).map(z => `<div class="kv"><span>${z[1]}</span><span>${h.parts[z[0]]}</span></div>`).join('');
+  return `<h1>Расчёт стоимости</h1><p class="sub">Сумма ориентировочная, точная — после осмотра. <a class="link" href="#/settings" style="padding:0">Изменить цены</a></p>
   <div class="card"><div class="cap">Автомобиль и клиент</div>${carForm('calc', draft.car)}</div>
   <div class="card"><div class="cap">Состояние краски</div>
     <div class="seg"><button class="${draft.paint === 'fresh' ? 'on' : ''}" data-act="paint" data-v="fresh">Заводская</button><button class="${draft.paint === 'old' ? 'on' : ''}" data-act="paint" data-v="old">Старая или перекрас</button></div>
     <p class="muted small" style="margin:10px 0 0">Метод работает, только пока краска цела. Трещины, сколы или вздутия в месте удара — нужна покраска.</p></div>
-  <div class="row between"><div class="cap" style="margin:10px 0">Вмятины</div><a class="link" href="#/map">Отметить на схеме</a></div>
+  <div class="row between"><div class="cap" style="margin:10px 0">Вмятины</div><button class="link" data-act="map-dent">Отметить на схеме</button></div>
   ${draft.dents.map(dentCard).join('')}
   <button class="btn ghost" data-act="dent-add" style="margin-bottom:12px">+ Добавить вмятину</button>
+  <div class="card"><div class="row between"><b>Град</b><button class="chip sm ${h.on ? 'on' : ''}" data-act="hail-toggle">${h.on ? 'Включён' : 'Добавить'}</button></div>
+    ${h.on ? `<p class="muted small" style="margin:8px 0 10px">${rub(S.extras.hailPrice)} за вмятину. Количество указывается по деталям на схеме.</p>
+    ${parts || '<p class="muted" style="margin:0 0 10px">Количество пока не указано</p>'}
+    <button class="btn ghost" data-act="map-hail" style="margin-top:10px">Указать количество на схеме</button>
+    <div class="lbl">Наценка за сложность</div><div class="chips">${pc.map(v => `<button class="chip sm ${h.up === v ? 'on' : ''}" data-act="hail-up" data-v="${v}">${v ? '+' + v + '%' : 'Нет'}</button>`).join('')}</div>
+    <div class="lbl">Скидка за количество</div><div class="chips">${pc.map(v => `<button class="chip sm ${h.down === v ? 'on' : ''}" data-act="hail-down" data-v="${v}">${v ? '−' + v + '%' : 'Нет'}</button>`).join('')}</div>
+    <div class="row between sum"><span class="muted">${dentsWord(t.hail.n)} · ${dur(t.hail.m)}</span><b>${rub(t.hail.p)}</b></div>` : '<p class="muted small" style="margin:8px 0 0">Отдельная позиция: цена за вмятину и количество по каждой детали.</p>'}</div>
+  <div class="card"><div class="cap">Дополнительно</div>
+    <div class="row between"><span>Защитная плёнка, ${rub(S.extras.film)}</span><button class="chip sm ${draft.film ? 'on' : ''}" data-act="film">${draft.film ? 'Добавлена' : 'Добавить'}</button></div>
+    <label for="calc-arm">Арматурные работы, ₽</label><input id="calc-arm" data-s="calcroot" data-f="arm" inputmode="numeric" maxlength="7" value="${esc(draft.arm)}" placeholder="Впишите сумму, если нужны"></div>
   <div class="card"><label for="calc-comment">Комментарий</label><textarea id="calc-comment" data-s="calcroot" data-f="comment" maxlength="500" placeholder="Например: град, машина с пробегом, клиент торопится">${esc(draft.comment)}</textarea>
-    <div class="row between total" style="margin:16px 0"><div><span class="muted small">Итого, ориентировочно</span><b>${rub(t.p)}</b></div><div class="t" style="text-align:right"><span class="muted small">Время работ</span><b>${dur(t.m)}</b></div></div>
-    <button class="btn" data-act="save-order">Сохранить расчёт</button></div>`;
+    <div class="row between total" style="margin:16px 0"><div><span class="muted small">Итого, ориентировочно</span><b id="tot-p">${rub(t.p)}</b></div><div class="t" style="text-align:right"><span class="muted small">Время работ</span><b>${dur(t.m)}</b></div></div>
+    <button class="btn" data-act="save-order">Сохранить расчёт</button>
+    <button class="btn ghost" data-act="clear-calc" style="margin-top:10px">Очистить расчёт</button></div>`;
 };
 V.map = () => {
-  const cnt = {}; draft.dents.forEach(d => { if (d.z) cnt[d.z] = (cnt[d.z] || 0) + d.q; });
-  const zr = (id, x, y, w, h, lines) => {
+  const hail = mapMode === 'hail', cnt = {};
+  if (hail) Object.assign(cnt, draft.hail.parts); else draft.dents.forEach(d => { if (d.z) cnt[d.z] = (cnt[d.z] || 0) + d.q; });
+  const zr = (id, x, y, w, h, lines, vert) => {
     const cx = x + w / 2, cy = y + h / 2, n = cnt[id];
-    return `<rect class="z ${n ? 'on' : ''}" data-act="zone" data-v="${id}" x="${x}" y="${y}" width="${w}" height="${h}" rx="14"/>` +
-      lines.map((l, i) => `<text x="${cx}" y="${cy + 3 + (i - (lines.length - 1) / 2) * 12}">${l}</text>`).join('') +
-      (n ? `<circle class="n" cx="${x + w - 12}" cy="${y + 12}" r="9" pointer-events="none"/><text class="nt" x="${x + w - 12}" y="${y + 16}">${n}</text>` : '');
+    return `<rect class="z ${n ? 'on' : ''}" data-act="zone" data-v="${id}" x="${x}" y="${y}" width="${w}" height="${h}" rx="${vert ? 10 : 14}"/>` +
+      (vert ? `<text transform="translate(${cx + 3} ${cy}) rotate(-90)">${lines[0]}</text>` : lines.map((l, i) => `<text x="${cx}" y="${cy + 3 + (i - (lines.length - 1) / 2) * 12}">${l}</text>`).join('')) +
+      (n ? `<circle class="n" cx="${x + w - 11}" cy="${y + 12}" r="10" pointer-events="none"/><text class="nt" x="${x + w - 11}" y="${y + 16}">${n}</text>` : '');
   };
   const marked = draft.dents.map((d, i) => d.z ? `<div class="kv"><span>${zoneName(d.z)} × ${d.q}</span><span><button class="link bad" style="padding:0" data-act="dent-del" data-i="${i}">Убрать</button></span></div>` : '').join('');
-  return `${back('#/calc', 'К расчёту')}<h1>Карта повреждений</h1><p class="sub">Нажмите на деталь — вмятина добавится в расчёт.</p>
-  <div class="card"><svg class="car" viewBox="0 0 320 400" role="img" aria-label="Схема кузова, вид сверху в развёртке">
-    <text x="160" y="14">ПЕРЕД</text>
-    ${zr('hood', 108, 24, 104, 96, ['Капот'])}${zr('roof', 108, 132, 104, 136, ['Крыша'])}${zr('trunk', 108, 280, 104, 84, ['Крышка', 'багажника'])}
-    ${zr('lf', 16, 30, 80, 84, ['Крыло', 'переднее'])}${zr('lfd', 16, 126, 80, 68, ['Дверь', 'передняя'])}${zr('lrd', 16, 206, 80, 68, ['Дверь', 'задняя'])}${zr('lr', 16, 286, 80, 78, ['Крыло', 'заднее'])}
-    ${zr('rf', 224, 30, 80, 84, ['Крыло', 'переднее'])}${zr('rfd', 224, 126, 80, 68, ['Дверь', 'передняя'])}${zr('rrd', 224, 206, 80, 68, ['Дверь', 'задняя'])}${zr('rr', 224, 286, 80, 78, ['Крыло', 'заднее'])}
-    <text x="56" y="384">ЛЕВЫЙ БОРТ</text><text x="160" y="384">ЗАД</text><text x="264" y="384">ПРАВЫЙ БОРТ</text>
+  const hc = calcHail();
+  return `${back('#/calc', 'К расчёту')}<h1>Карта повреждений</h1>
+  <div class="seg" style="margin:10px 0 12px"><button class="${hail ? '' : 'on'}" data-act="map-mode" data-v="dent">Вмятины</button><button class="${hail ? 'on' : ''}" data-act="map-mode" data-v="hail">Град</button></div>
+  <p class="sub">${hail ? 'Нажатие на деталь прибавляет одну вмятину. Точное число можно вписать ниже.' : 'Нажмите на деталь — вмятина добавится в расчёт.'}</p>
+  <div class="card"><svg class="car" viewBox="0 0 398 400" role="img" aria-label="Схема кузова, вид сверху в развёртке">
+    <text x="199" y="14">ПЕРЕД</text>
+    ${zr('hood', 130, 24, 138, 96, ['Капот'])}${zr('roof', 168, 132, 62, 136, ['Крыша'])}${zr('trunk', 130, 280, 138, 84, ['Крышка', 'багажника'])}
+    ${zr('lp', 130, 132, 32, 136, ['Стойка'], 1)}${zr('rp', 236, 132, 32, 136, ['Стойка'], 1)}
+    ${zr('lf', 46, 30, 76, 84, ['Крыло', 'переднее'])}${zr('lfd', 46, 126, 76, 68, ['Дверь', 'передняя'])}${zr('lrd', 46, 206, 76, 68, ['Дверь', 'задняя'])}${zr('lr', 46, 286, 76, 78, ['Крыло', 'заднее'])}
+    ${zr('rf', 276, 30, 76, 84, ['Крыло', 'переднее'])}${zr('rfd', 276, 126, 76, 68, ['Дверь', 'передняя'])}${zr('rrd', 276, 206, 76, 68, ['Дверь', 'задняя'])}${zr('rr', 276, 286, 76, 78, ['Крыло', 'заднее'])}
+    ${zr('ls', 8, 126, 32, 148, ['Порог'], 1)}${zr('rs', 358, 126, 32, 148, ['Порог'], 1)}
+    <text x="66" y="384">ЛЕВЫЙ БОРТ</text><text x="199" y="384">ЗАД</text><text x="332" y="384">ПРАВЫЙ БОРТ</text>
   </svg></div>
-  ${marked ? `<div class="card"><div class="cap">Отмечено</div>${marked}</div>` : ''}
+  ${hail ? `<div class="card"><div class="row between" style="margin-bottom:10px"><div class="cap" style="margin:0">Количество по деталям</div><b>${hc.n} всего</b></div>
+    ${ZONES.map(z => `<div class="set two"><label for="hail-${z[0]}" style="margin:0;color:var(--text)">${z[1]}</label><input id="hail-${z[0]}" inputmode="numeric" maxlength="3" data-s="hail" data-f="${z[0]}" value="${draft.hail.parts[z[0]] || ''}" placeholder="0"></div>`).join('')}</div>`
+    : (marked ? `<div class="card"><div class="cap">Отмечено</div>${marked}</div>` : '')}
   <a class="btn" href="#/calc" style="display:flex;align-items:center;justify-content:center;text-decoration:none">Перейти к расчёту</a>`;
 };
 V.inspect = () => {
@@ -465,6 +511,7 @@ function estimateText(o) {
   if (o.client) lines.push('Клиент: ' + o.client + (o.phone ? ', ' + o.phone : ''));
   lines.push('');
   o.dents.forEach((d, i) => lines.push(`${i + 1}. ${[zoneName(d.z), d.size, (d.loc || '').toLowerCase()].filter(Boolean).join(' · ')} × ${d.q} — ${rub(d.p)}`));
+  extraRows(o).forEach(r => lines.push(`${r[0]} — ${rub(r[1])}`));
   lines.push('', 'Итого: ' + rub(o.total), 'Время работ: ' + dur(o.min));
   if (o.comment) lines.push('Комментарий: ' + o.comment);
   lines.push('', 'Расчёт ориентировочный, точная стоимость — после осмотра.');
@@ -474,7 +521,8 @@ V.order = id => { const o = DB.orders.find(x => x.id === id); if (!o) return V.m
   const kv = (k, v) => v ? `<div class="kv"><span>${k}</span><span>${esc(v)}</span></div>` : '';
   return `${back('#/history', 'История заказов')}<div class="row between"><h1 style="margin:0">${esc(carTitle(o.car))}</h1><span class="badge ${o.status === 'done' ? 'done' : 'new'}">${o.status === 'done' ? 'Выполнен' : 'Новый'}</span></div><p class="sub">${dt(o.t)}</p>
   <div class="card">${kv('Гос. номер', o.car.plate) + kv('Клиент', o.client) + kv('Телефон', o.phone) + kv('Краска', o.paint === 'old' ? 'Старая или перекрас' : 'Заводская') + kv('Комментарий', o.comment)}</div>
-  <div class="card"><div class="cap">Вмятины</div>${o.dents.map((d, i) => `<div class="kv"><span>${i + 1}. ${esc([zoneName(d.z), d.size, d.loc].filter(Boolean).join(' · '))} × ${d.q}</span><span>${rub(d.p)}</span></div>`).join('')}
+  <div class="card"><div class="cap">Работы</div>${o.dents.map((d, i) => `<div class="kv"><span>${i + 1}. ${esc([zoneName(d.z), d.size, d.loc].filter(Boolean).join(' · '))} × ${d.q}</span><span>${rub(d.p)}</span></div>`).join('')}${extraRows(o).map(r => `<div class="kv"><span>${esc(r[0])}</span><span>${rub(r[1])}</span></div>`).join('')}
+    ${o.hail && o.hail.n ? `<p class="muted small" style="margin:8px 0 0">Град по деталям: ${ZONES.filter(z => o.hail.parts[z[0]]).map(z => z[1].toLowerCase() + ' — ' + o.hail.parts[z[0]]).join(', ')}</p>` : ''}
     <div class="row between total sum"><div><span class="muted small">Итого</span><b>${rub(o.total)}</b></div><div class="t" style="text-align:right"><span class="muted small">Время работ</span><b>${dur(o.min)}</b></div></div></div>
   <button class="btn" data-act="toggle-done" data-id="${id}">${o.status === 'done' ? 'Вернуть в новые' : 'Отметить выполненным'}</button>
   <button class="btn ghost" data-act="copy-est" data-id="${id}" style="margin-top:10px">Скопировать смету для клиента</button>
@@ -492,9 +540,16 @@ V.settings = () => `${back('#/home', 'Главная')}<h1>Настройки и
   <div class="card"><div class="cap">Цена и время за одну вмятину</div><div class="set muted small"><span>Размер</span><span style="text-align:right">Цена, ₽</span><span style="text-align:right">Минут</span></div>
     ${S.sizes.map((s, i) => `<div class="set"><span>${esc(s.label)}</span><input inputmode="numeric" data-set="sizes.${i}.price" value="${s.price}" aria-label="Цена, ${esc(s.label)}"><input inputmode="numeric" data-set="sizes.${i}.min" value="${s.min}" aria-label="Минут, ${esc(s.label)}"></div>`).join('')}</div>
   <div class="card"><div class="cap">Коэффициенты за расположение</div><p class="muted small" style="margin:0 0 10px">Цена и время умножаются на это число. 1 — без наценки.</p>
-    ${S.locs.map((l, i) => `<div class="set two"><span>${esc(l.label)}</span><input inputmode="decimal" data-set="locs.${i}.k" value="${l.k}" aria-label="Коэффициент, ${esc(l.label)}"></div>`).join('')}
+    ${S.locs.map((l, i) => l.k == null ? '' : `<div class="set two"><span>${esc(l.label)}</span><input inputmode="decimal" data-set="locs.${i}.k" value="${l.k}" aria-label="Коэффициент, ${esc(l.label)}"></div>`).join('')}
     <div class="set two" style="margin-top:14px"><span>Старая краска или перекрас (только цена)</span><input inputmode="decimal" data-set="oldK" value="${S.oldK}" aria-label="Коэффициент за старую краску"></div>
     <div class="set two"><span>Округлять цену до, ₽</span><input inputmode="numeric" data-set="round" value="${S.round}" aria-label="Шаг округления"></div></div>
+  <div class="card"><div class="cap">Доплаты и отдельные позиции, ₽</div>
+    <div class="set two"><span>Растянутый металл: до 2 см и 2–4 см</span><input inputmode="numeric" data-set="extras.stretchS" value="${S.extras.stretchS}" aria-label="Растянутый металл: до 2 см и 2–4 см"></div>
+    <div class="set two"><span>Растянутый металл: 4–7 см и больше</span><input inputmode="numeric" data-set="extras.stretchL" value="${S.extras.stretchL}" aria-label="Растянутый металл: 4–7 см и больше"></div>
+    <div class="set two"><span>Работа прибором</span><input inputmode="numeric" data-set="extras.device" value="${S.extras.device}" aria-label="Работа прибором"></div>
+    <div class="set two"><span>Защитная плёнка</span><input inputmode="numeric" data-set="extras.film" value="${S.extras.film}" aria-label="Защитная плёнка"></div>
+    <div class="set two"><span>Град, за одну вмятину</span><input inputmode="numeric" data-set="extras.hailPrice" value="${S.extras.hailPrice}" aria-label="Град, за одну вмятину"></div>
+    <div class="set two"><span>Град, минут на одну вмятину</span><input inputmode="numeric" data-set="extras.hailMin" value="${S.extras.hailMin}" aria-label="Град, минут на одну вмятину"></div></div>
   <div class="card"><div class="cap">Резервная копия</div><p class="muted small" style="margin:0 0 10px">${cloud ? 'Данные хранятся в облаке Telegram и видны на всех ваших устройствах.' : 'Сейчас данные хранятся только в этом браузере.'} Копию можно сохранить в «Избранное».</p>
     <button class="btn ghost" data-act="export">Скопировать все данные</button>
     <label for="imp">Восстановить из копии</label><textarea id="imp" placeholder="Вставьте сюда скопированные данные"></textarea>
@@ -529,19 +584,35 @@ window.addEventListener('hashchange', () => { render(); window.scrollTo(0, 0); }
 /* ───────── действия ───────── */
 const A = {
   'new-calc'() { draft = newDraft(); go('#/calc'); },
+  'clear-calc'() { ask('Очистить расчёт? Всё введённое сотрётся.', () => { draft = newDraft(); render(); window.scrollTo(0, 0); }); },
+  'dent-loc'(el) { const d = draft.dents[+el.dataset.i], v = el.dataset.v; let ls = d.ls || [];
+    if (v === 'flat') ls = ['flat']; else { ls = ls.filter(x => x !== 'flat'); ls = ls.indexOf(v) >= 0 ? ls.filter(x => x !== v) : ls.concat(v); if (!ls.length) ls = ['flat']; }
+    d.ls = ls; render(); },
+  'hail-toggle'() { draft.hail.on = !draft.hail.on; if (!draft.hail.on && !draft.dents.length) draft.dents.push(newDent()); render(); },
+  'hail-up'(el) { draft.hail.up = +el.dataset.v; render(); },
+  'hail-down'(el) { draft.hail.down = +el.dataset.v; render(); },
+  film() { draft.film = !draft.film; render(); },
+  'map-dent'() { mapMode = 'dent'; go('#/map'); },
+  'map-hail'() { mapMode = 'hail'; go('#/map'); },
+  'map-mode'(el) { mapMode = el.dataset.v; render(); },
   paint(el) { draft.paint = el.dataset.v; render(); },
   'dent-add'() { if (draft.dents.length >= 20) { toast('Не больше 20 позиций в одном расчёте'); return; } draft.dents.push(newDent()); render(); },
-  'dent-del'(el) { draft.dents.splice(+el.dataset.i, 1); if (!draft.dents.length) draft.dents.push(newDent()); render(); },
+  'dent-del'(el) { draft.dents.splice(+el.dataset.i, 1); if (!draft.dents.length && !draft.hail.on) draft.dents.push(newDent()); render(); },
   'dent-size'(el) { draft.dents[+el.dataset.i].s = el.dataset.v; render(); },
   'dent-qty'(el) { const d = draft.dents[+el.dataset.i]; d.q = Math.min(99, Math.max(1, d.q + (+el.dataset.v))); render(); },
-  zone(el) { const z = el.dataset.v, free = draft.dents.find(d => !d.z);
+  zone(el) { const z = el.dataset.v;
+    if (mapMode === 'hail') { draft.hail.on = true; draft.hail.parts[z] = Math.min(999, (draft.hail.parts[z] || 0) + 1); render(); return; }
+    const free = draft.dents.find(d => !d.z);
     if (free) free.z = z; else if (draft.dents.length < 20) draft.dents.push(newDent(z)); else { toast('Не больше 20 позиций в одном расчёте'); return; }
     render(); },
   'save-order'() {
     const c = draft.car; if (!(c.brand || c.plate || c.client)) { toast('Укажите марку, номер или клиента'); return; }
-    const t = calcTotal(), carId = upsertCar(c);
+    const t = calcTotal();
+    if (!draft.dents.length && !t.hail.n) { toast('Добавьте вмятину или количество для града'); return; }
+    const carId = upsertCar(c);
     const o = {id: uid(), t: Date.now(), carId, car: {brand: c.brand, model: c.model, year: c.year, plate: c.plate}, client: c.client, phone: c.phone, paint: draft.paint,
-      dents: draft.dents.map(d => { const x = calcDent(d, draft.paint); return {s: d.s, l: d.l, z: d.z, q: d.q, p: x.p, m: x.m, size: x.size, loc: x.loc}; }),
+      dents: draft.dents.map(d => { const x = calcDent(d, draft.paint); return {s: d.s, ls: d.ls, z: d.z, q: d.q, p: x.p, m: x.m, size: x.size, loc: x.loc}; }),
+      hail: t.hail.n ? {parts: draft.hail.parts, n: t.hail.n, up: draft.hail.up, down: draft.hail.down, p: t.hail.p, m: t.hail.m} : null, film: t.film, arm: t.arm,
       comment: draft.comment.trim(), total: t.p, min: t.m, status: 'new'};
     if (!put('o_' + o.id, o)) return;
     DB.orders.unshift(o); draft = newDraft(); buzz('success'); toast('Расчёт сохранён'); go('#/order/' + o.id);
@@ -586,6 +657,7 @@ document.addEventListener('change', e => {
   const el = e.target;
   if (el.dataset.chg === 'dent-zone') { draft.dents[+el.dataset.i].z = el.value; }
   else if (el.dataset.chg === 'dent-loc') { draft.dents[+el.dataset.i].l = el.value; render(); }
+  else if (el.dataset.s === 'hail') setTimeout(() => { const id = document.activeElement && document.activeElement.id; render(); const n = id && document.getElementById(id); if (n) n.focus(); }, 0);
   else if (el.dataset.set) {
     const path = el.dataset.set.split('.'); let o = S;
     for (let i = 0; i < path.length - 1; i++) o = o[path[i]];
@@ -597,9 +669,11 @@ document.addEventListener('change', e => {
 document.addEventListener('input', e => {
   const el = e.target, s = el.dataset.s; if (!s) return;
   if (s === 'carq') { carQ = el.value; $('#carlist').innerHTML = carList(); return; }
+  if (s === 'hail') { const n = Math.min(999, Math.floor(num(el.value))); if (n) draft.hail.parts[el.dataset.f] = n; else delete draft.hail.parts[el.dataset.f]; draft.hail.on = true; return; }
   const target = {calc: draft.car, insp: idraft.car, car: cdraft, calcroot: draft, insproot: idraft}[s];
   if (!target) return;
   target[el.dataset.f] = el.dataset.f === 'plate' ? el.value.toUpperCase() : el.value;
+  if (el.dataset.f === 'arm') { const tp = $('#tot-p'); if (tp) tp.textContent = rub(calcTotal().p); }
   if (el.dataset.f === 'brand') { fillModels(el.value); if (s !== 'car') target.carId = ''; }
 });
 
