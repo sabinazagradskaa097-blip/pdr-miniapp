@@ -468,7 +468,8 @@ function clients() {
     c.first = Math.min(c.first || r.t, r.t || c.first); c.last = Math.max(c.last || 0, r.t || 0);
     if (n && !byName[n]) byName[n] = key;
     const cn = carName(r.car), plate = r.car && r.car.plate;
-    if (cn || plate) { const ck = r.carId || normPlate(plate) || cn; if (!c.cars[ck]) c.cars[ck] = {id: r.carId && DB.cars.some(x => x.id === r.carId) ? r.carId : '', name: cn, plate}; }
+    if (cn || plate) { const ck = normPlate(plate) || cn.toLowerCase(), cid = r.carId && DB.cars.some(x => x.id === r.carId) ? r.carId : '';
+      const e = c.cars[ck] || (c.cars[ck] = {id: '', name: cn, plate}); if (cid) e.id = cid; if (cn) e.name = cn; }
     if (r.order) c.orders.push(r.order);
     if (r.appt) { c.appts.push(r.appt); const at = parseYmd(r.appt.date).getTime(); if (r.appt.status === 'done' && at > c.last) c.last = at; }
   });
