@@ -789,7 +789,7 @@ const A = {
   'new-calc'() { draft = newDraft(); go('#/calc'); },
   'clear-calc'() { ask('Очистить расчёт? Всё введённое сотрётся.', () => { draft = newDraft(); render(); window.scrollTo(0, 0); }); },
   'dent-loc'(el) { const d = draft.dents[+el.dataset.i], v = el.dataset.v; let ls = d.ls || [];
-    if (v === 'flat') ls = ['flat']; else { ls = ls.filter(x => x !== 'flat'); ls = ls.indexOf(v) >= 0 ? ls.filter(x => x !== v) : ls.concat(v); if (!ls.length) ls = ['flat']; }
+    ls = ls.indexOf(v) >= 0 ? ls.filter(x => x !== v) : ls.concat(v); if (!ls.length) ls = ['flat']; // всё сочетается, плоская панель тоже
     d.ls = ls; render(); },
   'hail-toggle'() { draft.hail.on = !draft.hail.on; if (!draft.hail.on && !draft.dents.length) draft.dents.push(newDent()); render(); },
   'hail-up'(el) { draft.hail.up = +el.dataset.v; render(); },
