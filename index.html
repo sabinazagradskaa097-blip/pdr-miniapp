@@ -103,6 +103,25 @@ nav svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;st
 #toast{position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom));transform:translate(-50%,20px);background:var(--text);color:var(--bg);
   padding:10px 16px;border-radius:12px;font-size:14px;font-weight:600;opacity:0;pointer-events:none;transition:.2s;z-index:9;max-width:88%;text-align:center}
 #toast.show{opacity:1;transform:translate(-50%,0)}
+a.btn{display:flex;align-items:center;justify-content:center;text-decoration:none}
+.badge.work{background:rgba(127,166,255,.16);color:#9db8ff}
+.week{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.day{display:flex;flex-direction:column;align-items:center;gap:2px;min-height:64px;padding:8px 0 6px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--text);font:inherit;cursor:pointer}
+.day span{font-size:11px;color:var(--muted)}
+.day b{font-size:17px;font-variant-numeric:tabular-nums}
+.day i{font-style:normal;font-size:11px;font-weight:700;color:var(--accent);min-height:14px}
+.day.today b{color:var(--accent)}
+.day.on{border-color:var(--accent);background:rgba(79,209,181,.14)}
+.calnav{display:flex;justify-content:space-between;align-items:center;margin:4px 0 10px}
+.calnav .link{text-decoration:none;font-size:15px}
+.bars{display:flex;align-items:flex-end;gap:3px;height:120px;margin-top:6px}
+.bars i{flex:1;background:var(--accent);border-radius:3px 3px 0 0;min-height:2px}
+.bars i.z{background:var(--line)}
+.barlbl{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:6px}
+.delta{font-size:13px;font-weight:600}
+.delta.up{color:var(--accent)} .delta.down{color:var(--bad)}
+.share{height:6px;border-radius:3px;background:var(--line);margin:4px 0 2px;overflow:hidden}
+.share i{display:block;height:100%;background:var(--accent)}
 </style>
 </head>
 <body>
@@ -220,7 +239,7 @@ const BRANDS = {
 const LS = 'pdr:';
 const cloud = inTg && tg.isVersionAtLeast && tg.isVersionAtLeast('6.9') && tg.CloudStorage ? tg.CloudStorage : null;
 let S = JSON.parse(JSON.stringify(DEFAULTS));
-const DB = {orders: [], insps: [], cars: []};
+const DB = {orders: [], insps: [], cars: [], appts: []};
 
 function lsAll() {
   const out = {};
@@ -262,7 +281,7 @@ function applySettings(raw) {
   document.title = S.name;
 }
 function ingest(map) {
-  DB.orders = []; DB.insps = []; DB.cars = [];
+  DB.orders = []; DB.insps = []; DB.cars = []; DB.appts = [];
   applySettings(null);
   Object.keys(map).forEach(k => {
     let o; try { o = JSON.parse(map[k]); } catch (e) { return; }
@@ -271,6 +290,7 @@ function ingest(map) {
     else if (k.indexOf('o_') === 0 && o.id) DB.orders.push(o);
     else if (k.indexOf('i_') === 0 && o.id) DB.insps.push(o);
     else if (k.indexOf('c_') === 0 && o.id) DB.cars.push(o);
+    else if (k.indexOf('a_') === 0 && o.id && o.car) DB.appts.push(o);
   });
   const byT = (a, b) => (b.t || 0) - (a.t || 0);
   DB.orders.sort(byT); DB.insps.sort(byT); DB.cars.sort(byT);
@@ -297,7 +317,7 @@ const carFields = c => ({carId: c && c.id || '', brand: c && c.brand || '', mode
 const newDent = z => ({s: S.sizes[0].id, ls: ['flat'], q: 1, z: z || ''});
 const newDraft = c => ({car: carFields(c), paint: 'fresh', dents: [newDent()], hail: {on: false, parts: {}, up: 0, down: 0}, film: false, visit: false, arm: '', comment: ''});
 const newIDraft = c => ({car: carFields(c), marks: {}, comment: ''});
-let draft, idraft, cdraft = null, hfilter = 'all', carQ = '', locked = false, mapMode = 'dent';
+let draft, idraft, cdraft = null, adraft = null, hfilter = 'all', carQ = '', cliQ = '', calDay = '', statP = 'month', locked = false, mapMode = 'dent';
 
 function calcDent(d, paint) {
   const si = Math.max(0, S.sizes.findIndex(x => x.id === d.s)), s = S.sizes[si];
@@ -396,6 +416,52 @@ const inspRow = x => { const c = inspCount(x.marks); return `<a class="item" hre
 const carRow = c => `<a class="item" href="#/car/${c.id}"><b>${esc(carTitle(c))}</b><span class="muted">${esc([c.plate, c.client, c.phone].filter(Boolean).join(' · ') || 'Без номера и клиента')}</span></a>`;
 const back = (h, t) => `<a class="link back" href="${h}">‹ ${t}</a>`;
 
+/* ───────── даты, записи, клиенты ───────── */
+const pad = n => String(n).padStart(2, '0');
+const ymd = d => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+const parseYmd = s => { const p = String(s || '').split('-'); const d = new Date(+p[0], +p[1] - 1, +p[2]); return isNaN(d) ? new Date() : d; };
+const addDays = (s, n) => { const d = parseYmd(s); d.setDate(d.getDate() + n); return ymd(d); };
+const today = () => ymd(new Date());
+const cap1 = s => s ? s[0].toUpperCase() + s.slice(1) : s;
+const dayTitle = s => cap1(parseYmd(s).toLocaleDateString('ru-RU', {weekday: 'long', day: 'numeric', month: 'long'}));
+const carName = c => [c && c.brand, c && c.model, c && c.year].filter(Boolean).join(' ');
+const AST = [['booked', 'Записан', 'new'], ['arrived', 'Приехал', 'work'], ['work', 'В работе', 'work'], ['done', 'Готово', 'done'], ['noshow', 'Не пришёл', 'bad']];
+const astOf = v => AST.find(a => a[0] === v) || AST[0];
+const apptBadge = a => { const s = astOf(a.status); return `<span class="badge ${s[2]}">${s[1]}</span>`; };
+const apptsOn = d => DB.appts.filter(a => a.date === d).sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+const newADraft = (date, src) => ({id: '', date: date || today(), time: '10:00', car: carFields(src), work: '', visit: false, addr: '', status: 'booked', orderId: ''});
+const short = (s, n) => { s = String(s || '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
+const apptRow = (a, withDate) => `<a class="item" href="#/appt/${a.id}"><div class="row between"><b>${withDate ? esc(parseYmd(a.date).toLocaleDateString('ru-RU', {day: 'numeric', month: 'short'})) + ', ' : ''}${esc(a.time || '—')} · ${esc(a.client || carName(a.car) || a.phone || 'Без имени')}</b>${apptBadge(a)}</div>
+  <span class="muted">${esc([a.client ? carName(a.car) : '', a.car.plate, a.visit ? 'выезд' : '', short(a.work, 50)].filter(Boolean).join(' · ') || 'Без подробностей')}</span></a>`;
+const phoneKey = p => { let d = String(p || '').replace(/\D/g, ''); if (d.length === 11 && (d[0] === '8' || d[0] === '7')) d = d.slice(1); return d.length >= 6 ? d : ''; };
+const intlPhone = p => { const k = phoneKey(p); return k.length === 10 ? '+7' + k : String(p || '').replace(/[^\d+]/g, ''); };
+const contactBtns = phone => phone ? `<div class="grid2" style="margin-top:14px"><a class="btn ghost" href="tel:${esc(intlPhone(phone))}">Позвонить</a><button class="btn ghost" data-act="tg-chat" data-v="${esc(intlPhone(phone))}">Написать</button></div>` : '';
+function clients() {
+  const recs = [];
+  DB.cars.forEach(c => { if (c.client || c.phone) recs.push({name: c.client, phone: c.phone, t: c.t, car: c, carId: c.id}); });
+  DB.orders.forEach(o => { if (o.client || o.phone) recs.push({name: o.client, phone: o.phone, t: o.t, car: o.car, carId: o.carId, order: o}); });
+  DB.appts.forEach(a => { if (a.client || a.phone) recs.push({name: a.client, phone: a.phone, t: a.t, car: a.car, carId: a.carId, appt: a}); });
+  recs.sort((a, b) => (a.t || 0) - (b.t || 0));
+  const map = {}, byName = {};
+  const nk = r => String(r.name || '').trim().toLowerCase();
+  recs.filter(r => phoneKey(r.phone)).concat(recs.filter(r => !phoneKey(r.phone))).forEach(r => {
+    const pk = phoneKey(r.phone), n = nk(r);
+    const key = pk ? 'p' + pk : (byName[n] || 'n' + n);
+    const c = map[key] || (map[key] = {key, name: '', phone: '', first: r.t, last: r.t, cars: {}, orders: [], appts: []});
+    if (r.name) c.name = r.name.trim(); if (pk) c.phone = r.phone;
+    c.first = Math.min(c.first || r.t, r.t || c.first); c.last = Math.max(c.last || 0, r.t || 0);
+    if (n && !byName[n]) byName[n] = key;
+    const cn = carName(r.car), plate = r.car && r.car.plate;
+    if (cn || plate) { const ck = r.carId || normPlate(plate) || cn; if (!c.cars[ck]) c.cars[ck] = {id: r.carId && DB.cars.some(x => x.id === r.carId) ? r.carId : '', name: cn, plate}; }
+    if (r.order) c.orders.push(r.order);
+    if (r.appt) { c.appts.push(r.appt); const at = parseYmd(r.appt.date).getTime(); if (r.appt.status === 'done' && at > c.last) c.last = at; }
+  });
+  return Object.keys(map).map(k => { const c = map[k]; c.done = c.orders.filter(o => o.status === 'done'); c.sum = c.done.reduce((a, o) => a + (o.total || 0), 0); return c; }).sort((a, b) => b.last - a.last);
+}
+const ordersWord = n => { const a = n % 100, b = n % 10; return n + ' ' + (a > 10 && a < 20 ? 'заказов' : b === 1 ? 'заказ' : b > 1 && b < 5 ? 'заказа' : 'заказов'); };
+const clientRow = c => `<a class="item" href="#/client/${encodeURIComponent(c.key)}"><div class="row between"><b>${esc(c.name || c.phone || 'Без имени')}</b>${c.sum ? `<b style="margin:0">${rub(c.sum)}</b>` : ''}</div>
+  <span class="muted">${esc([c.name ? c.phone : '', Object.keys(c.cars).map(k => c.cars[k].name || c.cars[k].plate).filter(Boolean).slice(0, 2).join(', '), c.orders.length ? ordersWord(c.orders.length) : ''].filter(Boolean).join(' · ') || 'Только запись')}</span></a>`;
+
 /* ───────── экраны ───────── */
 const V = {};
 V.home = () => {
@@ -403,10 +469,15 @@ V.home = () => {
   const st = (l, v) => `<div class="stat"><span>${l}</span><b>${v}</b></div>`;
   const sec = (h, t, d) => `<a class="item" href="${h}"><b>${t}</b><span class="muted">${d}</span></a>`;
   return `<h1>${esc(S.name)}</h1><p class="sub">${esc(S.sub)}</p>
-  <button class="btn" data-act="new-calc">Новый расчёт</button>
+  <div class="grid2"><button class="btn" data-act="new-calc">Новый расчёт</button><button class="btn ghost" data-act="appt-new">Записать клиента</button></div>
+  <div class="row between"><div class="cap">Сегодня, ${esc(parseYmd(today()).toLocaleDateString('ru-RU', {day: 'numeric', month: 'long'}))}</div><a class="link" href="#/cal" style="margin-top:12px">Календарь</a></div>
+  ${apptsOn(today()).map(a => apptRow(a)).join('') || '<div class="empty">На сегодня записей нет</div>'}
   <div class="cap">Показатели</div>
   <div class="grid2">${st('Создано заказов', n)}${st('Выполнено', DB.orders.filter(o => o.status === 'done').length)}${st('Автомобилей в базе', DB.cars.length)}${st('Сумма заказов', rub(sum))}${st('Средняя стоимость', n ? rub(sum / n) : '—')}${st('Среднее время работ', n ? dur(mins / n) : '—')}</div>
   <div class="cap">Разделы</div>
+  ${sec('#/stats', 'Статистика', 'Выручка, заказы и средний чек по периодам')}
+  ${sec('#/cal', 'Календарь записи', 'Кто, когда и во сколько приезжает')}
+  ${sec('#/clients', 'Клиенты', 'Телефоны, машины и история обращений')}
   ${sec('#/calc', 'Расчёт стоимости', 'Цена и время удаления вмятин')}
   ${sec('#/map', 'Карта повреждений', 'Отметить вмятины на схеме кузова')}
   ${sec('#/inspect', 'Осмотр автомобиля', 'Кузов, краска и следы ремонта')}
@@ -529,7 +600,7 @@ function estimateText(o) {
 V.order = id => { const o = DB.orders.find(x => x.id === id); if (!o) return V.missing();
   const kv = (k, v) => v ? `<div class="kv"><span>${k}</span><span>${esc(v)}</span></div>` : '';
   return `${back('#/history', 'История заказов')}<div class="row between"><h1 style="margin:0">${esc(carTitle(o.car))}</h1><span class="badge ${o.status === 'done' ? 'done' : 'new'}">${o.status === 'done' ? 'Выполнен' : 'Новый'}</span></div><p class="sub">${dt(o.t)}</p>
-  <div class="card">${kv('Гос. номер', o.car.plate) + kv('Клиент', o.client) + kv('Телефон', o.phone) + kv('Краска', o.paint === 'old' ? 'Старая или перекрас' : 'Заводская') + kv('Комментарий', o.comment)}</div>
+  <div class="card">${(() => { const ap = o.apptId && DB.appts.find(x => x.id === o.apptId); return ap ? `<div class="kv"><span>Запись</span><span><a class="link" style="padding:0" href="#/appt/${ap.id}">${esc(parseYmd(ap.date).toLocaleDateString('ru-RU', {day: 'numeric', month: 'short'}))}, ${esc(ap.time)}</a></span></div>` : ''; })()}${kv('Гос. номер', o.car.plate) + kv('Клиент', o.client) + kv('Телефон', o.phone) + kv('Краска', o.paint === 'old' ? 'Старая или перекрас' : 'Заводская') + kv('Комментарий', o.comment)}</div>
   <div class="card"><div class="cap">Работы</div>${o.dents.map((d, i) => `<div class="kv"><span>${i + 1}. ${esc([zoneName(d.z), d.size, d.loc].filter(Boolean).join(' · '))} × ${d.q}</span><span>${rub(d.p)}</span></div>`).join('')}${extraRows(o).map(r => `<div class="kv"><span>${esc(r[0])}</span><span>${rub(r[1])}</span></div>`).join('')}
     ${o.hail && o.hail.n ? `<p class="muted small" style="margin:8px 0 0">Град по деталям: ${ZONES.filter(z => o.hail.parts[z[0]]).map(z => z[1].toLowerCase() + ' — ' + o.hail.parts[z[0]]).join(', ')}</p>` : ''}
     <div class="row between total sum"><div><span class="muted small">Итого</span><b>${rub(o.total)}</b></div><div class="t" style="text-align:right"><span class="muted small">Время работ</span><b>${dur(o.min)}</b></div></div></div>
@@ -568,17 +639,105 @@ V.settings = () => `${back('#/home', 'Главная')}<h1>Настройки и
     <button class="btn ghost" data-act="export">Скопировать все данные</button>
     <label for="imp">Восстановить из копии</label><textarea id="imp" placeholder="Вставьте сюда скопированные данные"></textarea>
     <button class="btn ghost" data-act="import" style="margin-top:10px">Восстановить</button></div>`;
-V.missing = () => `${back('#/home', 'Главная')}<div class="empty">Запись не найдена — возможно, её удалили.</div>`;
+V.cal = () => {
+  const d = calDay || (calDay = today()), t0 = today(), mon = addDays(d, -((parseYmd(d).getDay() + 6) % 7));
+  const days = [0, 1, 2, 3, 4, 5, 6].map(i => addDays(mon, i)), wk = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+  const cnt = s => DB.appts.filter(a => a.date === s && a.status !== 'noshow').length;
+  const soon = DB.appts.filter(a => a.date > d && a.status === 'booked').sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time)).slice(0, 5);
+  return `<div class="row between"><h1 style="margin:0">Запись</h1><button class="btn sm" data-act="appt-new">+ Запись</button></div>
+  <p class="sub" style="margin-top:4px">${cap1(parseYmd(d).toLocaleDateString('ru-RU', {month: 'long', year: 'numeric'}))}</p>
+  <div class="calnav"><button class="link" data-act="cal-shift" data-v="-7">‹ Пред. неделя</button>${d === t0 ? '' : '<button class="link" data-act="cal-today">Сегодня</button>'}<button class="link" data-act="cal-shift" data-v="7">След. неделя ›</button></div>
+  <div class="week">${days.map((s, i) => `<button class="day ${s === d ? 'on' : ''} ${s === t0 ? 'today' : ''}" data-act="cal-day" data-v="${s}" aria-label="${dayTitle(s)}, записей: ${cnt(s)}"><span>${wk[i]}</span><b>${parseYmd(s).getDate()}</b><i>${cnt(s) || ''}</i></button>`).join('')}</div>
+  <label for="cal-date">Перейти к дате</label><input type="date" id="cal-date" data-chg="cal-date" value="${d}">
+  <div class="row between"><div class="cap">${dayTitle(d)}</div><button class="link" data-act="appt-new" style="margin-top:12px">+ На этот день</button></div>
+  ${apptsOn(d).map(a => apptRow(a)).join('') || '<div class="empty">На этот день записей нет</div>'}
+  ${soon.length ? `<div class="cap">Дальше по записи</div>${soon.map(a => apptRow(a, true)).join('')}` : ''}`;
+};
+V.apptform = () => { if (!adraft) adraft = newADraft(calDay);
+  return `${back(adraft.id ? '#/appt/' + adraft.id : '#/cal', adraft.id ? 'К записи' : 'Календарь')}<h1>${adraft.id ? 'Изменить запись' : 'Новая запись'}</h1><p class="sub">Хватит имени или телефона — остальное можно дописать потом.</p>
+  <div class="card"><div class="grid2"><div><label for="appt-date">Дата</label><input type="date" id="appt-date" data-s="approot" data-f="date" value="${esc(adraft.date)}"></div><div><label for="appt-time">Время</label><input type="time" id="appt-time" data-s="approot" data-f="time" value="${esc(adraft.time)}"></div></div></div>
+  <div class="card"><div class="cap">Клиент и автомобиль</div>${carForm('appt', adraft.car)}</div>
+  <div class="card"><label for="appt-work">Что нужно сделать</label><textarea id="appt-work" data-s="approot" data-f="work" maxlength="300" placeholder="Например: вмятина на задней двери после парковки">${esc(adraft.work)}</textarea>
+    <div class="row between" style="margin-top:14px"><span>Выезд к клиенту</span><button class="chip sm ${adraft.visit ? 'on' : ''}" data-act="appt-visit" role="checkbox" aria-checked="${adraft.visit}">${adraft.visit ? '✓ Да' : 'Нет'}</button></div>
+    ${adraft.visit ? `<label for="appt-addr">Адрес</label><input id="appt-addr" data-s="approot" data-f="addr" value="${esc(adraft.addr)}" maxlength="120" placeholder="Куда ехать">` : ''}</div>
+  <button class="btn" data-act="save-appt">Сохранить запись</button>`; };
+V.appt = id => { const a = DB.appts.find(x => x.id === id); if (!a) return V.missing();
+  const o = a.orderId && DB.orders.find(x => x.id === a.orderId), c = clients().find(x => x.appts.indexOf(a) >= 0);
+  const kv = (k, v) => v ? `<div class="kv"><span>${k}</span><span>${esc(v)}</span></div>` : '';
+  return `${back('#/cal', 'Календарь')}<div class="row between"><h1 style="margin:0">${esc(a.client || carName(a.car) || a.phone || 'Запись')}</h1>${apptBadge(a)}</div><p class="sub">${dayTitle(a.date)}, ${esc(a.time || 'время не указано')}</p>
+  <div class="card">${kv('Автомобиль', carName(a.car)) + kv('Гос. номер', a.car.plate) + kv('Телефон', a.phone) + kv('Что сделать', a.work) + kv('Выезд', a.visit ? (a.addr || 'Да') : '')}${c ? `<a class="link" href="#/client/${encodeURIComponent(c.key)}">Карточка клиента</a>` : ''}</div>
+  <div class="cap">Статус</div><div class="chips">${AST.map(s => `<button class="chip sm ${a.status === s[0] ? 'on' : ''}" data-act="appt-status" data-id="${id}" data-v="${s[0]}">${s[1]}</button>`).join('')}</div>
+  ${contactBtns(a.phone)}
+  ${o ? `<div class="cap">Расчёт по записи</div>${orderRow(o)}` : `<button class="btn" data-act="appt-calc" data-id="${id}" style="margin-top:16px">Сделать расчёт</button>`}
+  <button class="btn ghost" data-act="appt-edit" data-id="${id}" style="margin-top:10px">Изменить запись</button>
+  <button class="btn danger" data-act="del-appt" data-id="${id}" style="margin-top:10px">Удалить запись</button>`; };
+function clientList() {
+  const q = cliQ.trim().toLowerCase(), all = clients(), qd = q.replace(/\D/g, '');
+  const list = q ? all.filter(c => [c.name, c.phone, Object.keys(c.cars).map(k => c.cars[k].name + ' ' + (c.cars[k].plate || '')).join(' ')].join(' ').toLowerCase().indexOf(q) >= 0 || (qd.length >= 3 && phoneKey(c.phone).indexOf(qd) >= 0)) : all;
+  return list.map(clientRow).join('') || `<div class="empty">${all.length ? 'Ничего не нашлось' : 'Клиентов пока нет.<br>База соберётся сама из записей и расчётов.'}</div>`;
+}
+V.clients = () => `<h1>Клиенты</h1><p class="sub">Собираются сами из записей, расчётов и базы автомобилей.</p>
+  <label for="cli-q" style="margin-top:0">Поиск по имени, телефону или машине</label><input id="cli-q" data-s="cliq" value="${esc(cliQ)}" placeholder="Например: Иван или 900" autocomplete="off">
+  <div id="clilist" style="margin-top:12px">${clientList()}</div>`;
+V.client = key => { key = decodeURIComponent(key || ''); const c = clients().find(x => x.key === key); if (!c) return V.missing();
+  const kv = (k, v) => v ? `<div class="kv"><span>${k}</span><span>${esc(v)}</span></div>` : '';
+  const cars = Object.keys(c.cars).map(k => c.cars[k]);
+  const appts = c.appts.slice().sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time)), orders = c.orders.slice().sort((a, b) => b.t - a.t);
+  return `${back('#/clients', 'Клиенты')}<h1>${esc(c.name || c.phone || 'Без имени')}</h1><p class="sub">${c.name && c.phone ? esc(c.phone) : 'Клиент'}</p>
+  <div class="card">${kv('Заказов', String(c.orders.length)) + kv('Выполнено на сумму', c.sum ? rub(c.sum) : '') + kv('Записей', c.appts.length ? String(c.appts.length) : '') + kv('Первое обращение', dt(c.first)) + kv('Последнее обращение', dt(c.last))}</div>
+  ${contactBtns(c.phone)}
+  <div class="grid2" style="margin-top:10px"><button class="btn" data-act="client-appt" data-v="${esc(c.key)}">Записать</button><button class="btn ghost" data-act="client-calc" data-v="${esc(c.key)}">Новый расчёт</button></div>
+  ${cars.length ? `<div class="cap">Автомобили</div>${cars.map(x => x.id ? `<a class="item" href="#/car/${x.id}"><b>${esc(x.name || 'Автомобиль')}</b><span class="muted">${esc(x.plate || 'Без номера')}</span></a>` : `<div class="item" style="cursor:default"><b>${esc(x.name || 'Автомобиль')}</b><span class="muted">${esc(x.plate || 'Без номера')}</span></div>`).join('')}` : ''}
+  <div class="cap">Записи</div>${appts.map(a => apptRow(a, true)).join('') || '<div class="empty">Записей нет</div>'}
+  <div class="cap">Заказы</div>${orders.map(orderRow).join('') || '<div class="empty">Заказов нет</div>'}`; };
+const doneT = o => o.doneAt || o.t;
+function periodOf(p) {
+  const n = new Date(); let a, pa;
+  if (p === 'week') { a = new Date(n.getFullYear(), n.getMonth(), n.getDate() - (n.getDay() + 6) % 7); pa = new Date(a); pa.setDate(a.getDate() - 7); }
+  else if (p === 'year') { a = new Date(n.getFullYear(), 0, 1); pa = new Date(n.getFullYear() - 1, 0, 1); }
+  else { a = new Date(n.getFullYear(), n.getMonth(), 1); pa = new Date(n.getFullYear(), n.getMonth() - 1, 1); }
+  return {a, now: n.getTime(), pa: pa.getTime(), pb: pa.getTime() + (n.getTime() - a.getTime())};
+}
+V.stats = () => {
+  const P = periodOf(statP), a0 = P.a.getTime();
+  const inR = (t, x, y) => t >= x && t <= y;
+  const cur = DB.orders.filter(o => o.status === 'done' && inR(doneT(o), a0, P.now)), prev = DB.orders.filter(o => o.status === 'done' && inR(doneT(o), P.pa, P.pb));
+  const sum = l => l.reduce((s, o) => s + (o.total || 0), 0), rev = sum(cur), prevRev = sum(prev);
+  const made = DB.orders.filter(o => inR(o.t, a0, P.now));
+  const aEnd = ymd(new Date(P.now)), aFrom = ymd(P.a), ap = DB.appts.filter(x => x.date >= aFrom && x.date <= aEnd);
+  const word = {week: 'прошлой неделе', month: 'прошлому месяцу', year: 'прошлому году'}[statP];
+  const delta = (c, p) => { if (!p) return c ? `<div class="delta" style="color:var(--muted)">${{week: 'на прошлой неделе', month: 'в прошлом месяце', year: 'в прошлом году'}[statP]}: 0</div>` : ''; const d = Math.round((c - p) / p * 100); if (!d) return `<div class="delta" style="color:var(--muted)">как ${{week: 'на прошлой неделе', month: 'в прошлом месяце', year: 'в прошлом году'}[statP]}</div>`; return `<div class="delta ${d >= 0 ? 'up' : 'down'}">${d >= 0 ? '+' : '−'}${Math.abs(d)}% к ${word}</div>`; };
+  const st = (l, v, extra) => `<div class="stat"><span>${l}</span><b>${v}</b>${extra || ''}</div>`;
+  // столбики выручки
+  let buckets = [], labels;
+  if (statP === 'year') { for (let m = 0; m < 12; m++) buckets.push([new Date(P.a.getFullYear(), m, 1).getTime(), new Date(P.a.getFullYear(), m + 1, 1).getTime()]); labels = ['Янв', 'Апр', 'Июл', 'Окт', 'Дек']; }
+  else { const nd = statP === 'week' ? 7 : new Date(P.a.getFullYear(), P.a.getMonth() + 1, 0).getDate(); for (let i = 0; i < nd; i++) buckets.push([new Date(P.a.getFullYear(), P.a.getMonth(), P.a.getDate() + i).getTime(), new Date(P.a.getFullYear(), P.a.getMonth(), P.a.getDate() + i + 1).getTime()]);
+    labels = statP === 'week' ? ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'] : ['1', '10', '20', String(nd)]; }
+  const vals = buckets.map(b => sum(cur.filter(o => doneT(o) >= b[0] && doneT(o) < b[1]))), max = Math.max.apply(null, vals.concat(1));
+  // из чего сложилась выручка
+  const parts = [['Вмятины', cur.reduce((s, o) => s + (o.dents || []).reduce((x, d) => x + (d.p || 0), 0), 0)], ['Град', cur.reduce((s, o) => s + (o.hail ? o.hail.p || 0 : 0), 0)],
+    ['Защитная плёнка', sum(cur.map(o => ({total: o.film || 0})))], ['Арматурные работы', sum(cur.map(o => ({total: o.arm || 0})))], ['Выезд', sum(cur.map(o => ({total: o.visit || 0})))]].filter(x => x[1]);
+  const seg = (v, t) => `<button class="${statP === v ? 'on' : ''}" data-act="stat-p" data-v="${v}">${t}</button>`;
+  return `${back('#/home', 'Главная')}<h1>Статистика</h1><p class="sub">Выручка считается по выполненным заказам, по дню, когда заказ отмечен выполненным.</p>
+  <div class="seg" style="margin-bottom:14px">${seg('week', 'Неделя')}${seg('month', 'Месяц')}${seg('year', 'Год')}</div>
+  <div class="grid2">${st('Выручка', rub(rev), delta(rev, prevRev))}${st('Выполнено заказов', cur.length, delta(cur.length, prev.length))}${st('Средний чек', cur.length ? rub(rev / cur.length) : '—')}${st('Время в работе', cur.length ? dur(cur.reduce((s, o) => s + (o.min || 0), 0)) : '—')}${st('Новых расчётов', made.length, made.length ? `<div class="delta" style="color:var(--muted)">на ${rub(sum(made))}</div>` : '')}${st('Записей', ap.length, ap.filter(x => x.status === 'noshow').length ? `<div class="delta down">не пришли: ${ap.filter(x => x.status === 'noshow').length}</div>` : '')}</div>
+  <div class="card" style="margin-top:12px"><div class="cap">Выручка по ${statP === 'year' ? 'месяцам' : 'дням'}</div>
+    <div class="bars" role="img" aria-label="Выручка по ${statP === 'year' ? 'месяцам' : 'дням'}">${vals.map(v => `<i class="${v ? '' : 'z'}" style="height:${v ? Math.max(4, v / max * 100) : 2}%"></i>`).join('')}</div>
+    <div class="barlbl">${labels.map(l => `<span>${l}</span>`).join('')}</div></div>
+  <div class="card"><div class="cap">Из чего сложилась выручка</div>${parts.length ? parts.map(x => `<div style="margin-bottom:10px"><div class="row between" style="font-size:15px"><span>${x[0]}</span><span>${rub(x[1])}</span></div><div class="share"><i style="width:${Math.round(x[1] / rev * 100)}%"></i></div></div>`).join('') : '<p class="muted" style="margin:0">Выполненных заказов за этот период пока нет.</p>'}</div>
+  <p class="muted small">Сравнение идёт с тем же количеством дней прошлого периода.</p>`;
+};
+V.missing = () =>`${back('#/home', 'Главная')}<div class="empty">Запись не найдена — возможно, её удалили.</div>`;
 
 /* ───────── маршруты ───────── */
 const TABS = [
   ['home', 'Главная', '<path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>'],
   ['calc', 'Расчёт', '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h3"/>'],
-  ['inspect', 'Осмотр', '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M8.5 12l2.5 2.5 4.5-5"/>'],
-  ['cars', 'Авто', '<path d="M4 16v-3l2-5h12l2 5v3M4 16h16M4 16v2m16-2v2"/><circle cx="8" cy="13" r=".6"/><circle cx="16" cy="13" r=".6"/>'],
+  ['cal', 'Запись', '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/>'],
+  ['clients', 'Клиенты', '<circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5M16 5.2a3 3 0 0 1 0 5.6M18 14.4c1.4.7 2.3 2.2 2.6 4.6"/>'],
   ['history', 'История', '<path d="M4 7h16M4 12h16M4 17h10"/>']
 ];
-const TAB_OF = {home: 'home', library: 'home', settings: 'home', insp: 'home', calc: 'calc', map: 'calc', inspect: 'inspect', cars: 'cars', car: 'cars', history: 'history', order: 'history'};
+const TAB_OF = {home: 'home', library: 'home', settings: 'home', stats: 'home', insp: 'home', inspect: 'home', calc: 'calc', map: 'calc', cal: 'cal', appt: 'cal', clients: 'clients', client: 'clients', cars: 'clients', car: 'clients', history: 'history', order: 'history'};
 function route() { const p = location.hash.replace(/^#\/?/, '').split('/'); return {name: p[0] || 'home', id: p[1] || ''}; }
 function render() {
   if (locked) return;
@@ -586,11 +745,13 @@ function render() {
   if (r.name === 'car') html = r.id === 'new' ? V.carnew() : V.car(r.id);
   else if (r.name === 'order') html = V.order(r.id);
   else if (r.name === 'insp') html = V.insp(r.id);
+  else if (r.name === 'appt') html = r.id === 'new' || r.id === 'edit' ? V.apptform() : V.appt(r.id);
+  else if (r.name === 'client') html = V.client(r.id);
   else html = (V[r.name] && r.name !== 'missing' ? V[r.name] : V.home)();
   $('#app').innerHTML = html;
   const tab = TAB_OF[r.name] || 'home';
   $('#nav').innerHTML = TABS.map(t => `<a href="#/${t[0]}" class="${t[0] === tab ? 'on' : ''}"><svg viewBox="0 0 24 24" aria-hidden="true">${t[2]}</svg>${t[1]}</a>`).join('');
-  if (r.name === 'calc') fillModels(draft.car.brand); else if (r.name === 'inspect') fillModels(idraft.car.brand); else if (r.name === 'car') fillModels(cdraft && cdraft.brand);
+  if (r.name === 'calc') fillModels(draft.car.brand); else if (r.name === 'inspect') fillModels(idraft.car.brand); else if (r.name === 'car') fillModels(cdraft && cdraft.brand); else if (r.name === 'appt' && adraft) fillModels(adraft.car.brand);
   if (inTg && tg.BackButton) { try { TABS.some(t => t[0] === r.name) ? tg.BackButton.hide() : tg.BackButton.show(); } catch (e) {} }
 }
 window.addEventListener('hashchange', () => { render(); window.scrollTo(0, 0); });
@@ -625,11 +786,13 @@ const A = {
     const t = calcTotal();
     if (!draft.dents.length && !t.hail.n) { toast('Добавьте вмятину или количество для града'); return; }
     const carId = upsertCar(c);
-    const o = {id: uid(), t: Date.now(), carId, car: {brand: c.brand, model: c.model, year: c.year, plate: c.plate}, client: c.client, phone: c.phone, paint: draft.paint,
+    const o = {id: uid(), t: Date.now(), carId, apptId: draft.apptId || '', car: {brand: c.brand, model: c.model, year: c.year, plate: c.plate}, client: c.client, phone: c.phone, paint: draft.paint,
       dents: draft.dents.map(d => { const x = calcDent(d, draft.paint); return {s: d.s, ls: d.ls, z: d.z, q: d.q, p: x.p, m: x.m, size: x.size, loc: x.loc}; }),
       hail: t.hail.n ? {parts: draft.hail.parts, n: t.hail.n, up: draft.hail.up, down: draft.hail.down, p: t.hail.p, m: t.hail.m} : null, film: t.film, arm: t.arm, visit: t.visit,
       comment: draft.comment.trim(), total: t.p, min: t.m, status: 'new'};
     if (!put('o_' + o.id, o)) return;
+    const ap = o.apptId && DB.appts.find(x => x.id === o.apptId);
+    if (ap) { ap.orderId = o.id; if (ap.status === 'booked' || ap.status === 'arrived') ap.status = 'work'; put('a_' + ap.id, ap); }
     DB.orders.unshift(o); draft = newDraft(); buzz('success'); toast('Расчёт сохранён'); go('#/order/' + o.id);
   },
   mark(el) { const k = el.dataset.k, v = el.dataset.v; if (idraft.marks[k] === v) delete idraft.marks[k]; else idraft.marks[k] = v; render(); },
@@ -651,18 +814,48 @@ const A = {
   'car-insp'(el) { idraft = newIDraft(DB.cars.find(c => c.id === el.dataset.id)); go('#/inspect'); },
   'del-car'(el) { ask('Удалить автомобиль из базы? Его заказы и осмотры останутся в истории.', () => { const id = el.dataset.id; DB.cars = DB.cars.filter(c => c.id !== id); del('c_' + id); go('#/cars'); }); },
   hfilter(el) { hfilter = el.dataset.v; render(); },
-  'toggle-done'(el) { const o = DB.orders.find(x => x.id === el.dataset.id); if (!o) return; o.status = o.status === 'done' ? 'new' : 'done'; o.doneAt = o.status === 'done' ? Date.now() : 0; put('o_' + o.id, o); buzz('success'); render(); },
+  'stat-p'(el) { statP = el.dataset.v; render(); },
+  'cal-day'(el) { calDay = el.dataset.v; render(); },
+  'cal-shift'(el) { calDay = addDays(calDay || today(), +el.dataset.v); render(); },
+  'cal-today'() { calDay = today(); render(); },
+  'appt-new'() { adraft = newADraft(location.hash.indexOf('#/cal') === 0 ? calDay : today()); go('#/appt/new'); },
+  'appt-visit'() { adraft.visit = !adraft.visit; render(); },
+  'save-appt'() {
+    const c = adraft.car; if (!(c.client || c.phone || c.brand || c.plate)) { toast('Укажите имя, телефон или машину'); return; }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(adraft.date)) { toast('Укажите дату'); return; }
+    const carId = c.brand || c.plate ? upsertCar(c) : '';
+    let a = adraft.id && DB.appts.find(x => x.id === adraft.id);
+    if (!a) { a = {id: uid(), t: Date.now(), status: 'booked', orderId: ''}; }
+    Object.assign(a, {date: adraft.date, time: adraft.time, carId, car: {brand: c.brand, model: c.model, year: c.year, plate: c.plate}, client: (c.client || '').trim(), phone: (c.phone || '').trim(),
+      work: (adraft.work || '').trim(), visit: !!adraft.visit, addr: adraft.visit ? (adraft.addr || '').trim() : ''});
+    if (!put('a_' + a.id, a)) return;
+    if (DB.appts.indexOf(a) < 0) DB.appts.push(a);
+    calDay = a.date; adraft = null; buzz('success'); toast('Запись сохранена'); go('#/appt/' + a.id);
+  },
+  'appt-status'(el) { const a = DB.appts.find(x => x.id === el.dataset.id); if (!a) return; a.status = el.dataset.v; put('a_' + a.id, a); buzz('success'); render(); },
+  'appt-edit'(el) { const a = DB.appts.find(x => x.id === el.dataset.id); if (!a) return;
+    adraft = {id: a.id, date: a.date, time: a.time, car: Object.assign({carId: a.carId || ''}, a.car, {client: a.client, phone: a.phone}), work: a.work, visit: a.visit, addr: a.addr}; go('#/appt/edit'); },
+  'appt-calc'(el) { const a = DB.appts.find(x => x.id === el.dataset.id); if (!a) return;
+    draft = newDraft(Object.assign({id: a.carId}, a.car, {client: a.client, phone: a.phone})); draft.apptId = a.id; draft.visit = !!a.visit; if (a.work) draft.comment = a.work; go('#/calc'); },
+  'del-appt'(el) { ask('Удалить запись? Вернуть её будет нельзя.', () => { const id = el.dataset.id; DB.appts = DB.appts.filter(a => a.id !== id); del('a_' + id); go('#/cal'); }); },
+  'tg-chat'(el) { const url = 'https://t.me/' + el.dataset.v; try { if (inTg && tg.openTelegramLink) tg.openTelegramLink(url); else window.open(url, '_blank'); } catch (e) { window.open(url, '_blank'); } },
+  'client-appt'(el) { const c = clients().find(x => x.key === el.dataset.v); if (!c) return; const car = Object.keys(c.cars).map(k => c.cars[k])[0] || {};
+    const src = Object.assign({}, car.id ? DB.cars.find(x => x.id === car.id) : {}, {client: c.name, phone: c.phone}); adraft = newADraft(today(), src); go('#/appt/new'); },
+  'client-calc'(el) { const c = clients().find(x => x.key === el.dataset.v); if (!c) return; const car = Object.keys(c.cars).map(k => c.cars[k])[0] || {};
+    draft = newDraft(Object.assign({}, car.id ? DB.cars.find(x => x.id === car.id) : {}, {client: c.name, phone: c.phone})); go('#/calc'); },
+  'toggle-done'(el) { const o = DB.orders.find(x => x.id === el.dataset.id); if (!o) return; o.status = o.status === 'done' ? 'new' : 'done'; o.doneAt = o.status === 'done' ? Date.now() : 0; put('o_' + o.id, o);
+    const ap = o.apptId && DB.appts.find(x => x.id === o.apptId); if (ap && o.status === 'done' && ap.status !== 'done') { ap.status = 'done'; put('a_' + ap.id, ap); } buzz('success'); render(); },
   'copy-est'(el) { const o = DB.orders.find(x => x.id === el.dataset.id); if (o) copy(estimateText(o), 'Смета скопирована'); },
   'del-order'(el) { ask('Удалить заказ? Вернуть его будет нельзя.', () => { const id = el.dataset.id; DB.orders = DB.orders.filter(o => o.id !== id); del('o_' + id); go('#/history'); }); },
   'del-insp'(el) { ask('Удалить осмотр? Вернуть его будет нельзя.', () => { const id = el.dataset.id; DB.insps = DB.insps.filter(o => o.id !== id); del('i_' + id); go('#/home'); }); },
-  export() { copy(JSON.stringify({app: 'pdr', v: 1, settings: S, orders: DB.orders, insps: DB.insps, cars: DB.cars}), 'Данные скопированы'); },
+  export() { copy(JSON.stringify({app: 'pdr', v: 1, settings: S, orders: DB.orders, insps: DB.insps, cars: DB.cars, appts: DB.appts}), 'Данные скопированы'); },
   import() {
     let d; try { d = JSON.parse($('#imp').value); } catch (e) { d = null; }
     if (!d || d.app !== 'pdr') { toast('Это не похоже на копию данных'); return; }
     ask('Добавить данные из копии к текущим? Записи с тем же номером будут заменены.', () => {
       const map = lsAll(), add = (p, list) => (Array.isArray(list) ? list : []).forEach(o => { if (o && o.id && put(p + o.id, o)) map[p + o.id] = JSON.stringify(o); });
       if (d.settings) { put('settings', d.settings); map.settings = JSON.stringify(d.settings); }
-      add('o_', d.orders); add('i_', d.insps); add('c_', d.cars);
+      add('o_', d.orders); add('i_', d.insps); add('c_', d.cars); add('a_', d.appts);
       ingest(map); toast('Данные восстановлены'); go('#/home');
     });
   }
@@ -670,7 +863,8 @@ const A = {
 document.addEventListener('click', e => { const el = e.target.closest('[data-act]'); if (!el || !A[el.dataset.act]) return; e.preventDefault(); buzz(); A[el.dataset.act](el); });
 document.addEventListener('change', e => {
   const el = e.target;
-  if (el.dataset.chg === 'dent-zone') { draft.dents[+el.dataset.i].z = el.value; }
+  if (el.dataset.chg === 'cal-date') { if (el.value) { calDay = el.value; render(); } }
+  else if (el.dataset.chg === 'dent-zone') { draft.dents[+el.dataset.i].z = el.value; }
   else if (el.dataset.chg === 'dent-loc') { draft.dents[+el.dataset.i].l = el.value; render(); }
   else if (el.dataset.s === 'hail') setTimeout(() => { const id = document.activeElement && document.activeElement.id; render(); const n = id && document.getElementById(id); if (n) n.focus(); }, 0);
   else if (el.dataset.set) {
@@ -684,8 +878,9 @@ document.addEventListener('change', e => {
 document.addEventListener('input', e => {
   const el = e.target, s = el.dataset.s; if (!s) return;
   if (s === 'carq') { carQ = el.value; $('#carlist').innerHTML = carList(); return; }
+  if (s === 'cliq') { cliQ = el.value; $('#clilist').innerHTML = clientList(); return; }
   if (s === 'hail') { const n = Math.min(999, Math.floor(num(el.value))); if (n) draft.hail.parts[el.dataset.f] = n; else delete draft.hail.parts[el.dataset.f]; draft.hail.on = true; return; }
-  const target = {calc: draft.car, insp: idraft.car, car: cdraft, calcroot: draft, insproot: idraft}[s];
+  const target = {calc: draft.car, insp: idraft.car, car: cdraft, calcroot: draft, insproot: idraft, appt: adraft && adraft.car, approot: adraft}[s];
   if (!target) return;
   target[el.dataset.f] = el.dataset.f === 'plate' ? el.value.toUpperCase() : el.value;
   if (el.dataset.f === 'arm') { const t = calcTotal(), tp = $('#tot-p'), tm = $('#tot-m'); if (tp) tp.textContent = rub(t.p); if (tm) tm.textContent = dur(t.m); }
