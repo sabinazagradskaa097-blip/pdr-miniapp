@@ -131,6 +131,13 @@ a.btn{display:flex;align-items:center;justify-content:center;text-decoration:non
 .hday.on{background:var(--accent);color:var(--on-accent)}
 .hday.on span{color:var(--on-accent);opacity:.75}
 .hday.on .dt i{background:var(--on-accent)}
+.mgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+.mhead{margin-bottom:6px}
+.mhead span{text-align:center;font-size:12px;color:var(--muted)}
+.mday{min-height:0;aspect-ratio:1/1;padding:0;border-radius:12px;gap:3px}
+.mday b{font-size:15px}
+.mday.today:not(.on){box-shadow:inset 0 0 0 1.5px var(--accent)}
+.mday.today:not(.on) b{color:var(--accent)}
 </style>
 </head>
 <body>
@@ -657,17 +664,21 @@ V.settings = () => `${back('#/home', 'Главная')}<h1>Настройки и
     <label for="imp">Восстановить из копии</label><textarea id="imp" placeholder="Вставьте сюда скопированные данные"></textarea>
     <button class="btn ghost" data-act="import" style="margin-top:10px">Восстановить</button></div>`;
 V.cal = () => {
-  const d = calDay || (calDay = today()), t0 = today(), mon = addDays(d, -((parseYmd(d).getDay() + 6) % 7));
-  const days = [0, 1, 2, 3, 4, 5, 6].map(i => addDays(mon, i)), wk = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
-  const cnt = s => DB.appts.filter(a => a.date === s && a.status !== 'noshow').length;
+  const d = calDay || (calDay = today()), t0 = today(), dd = parseYmd(d), y = dd.getFullYear(), m = dd.getMonth();
+  const first = new Date(y, m, 1), nd = new Date(y, m + 1, 0).getDate(), off = (first.getDay() + 6) % 7;
+  const live = s => DB.appts.filter(a => a.date === s && a.status !== 'noshow').length;
+  const cells = [];
+  for (let i = 0; i < off; i++) cells.push('<span></span>');
+  for (let n = 1; n <= nd; n++) { const s = ymd(new Date(y, m, n)), c = live(s);
+    cells.push(`<button class="hday mday ${s === d ? 'on' : ''} ${s === t0 ? 'today' : ''}" data-act="cal-day" data-v="${s}" aria-label="${dayTitle(s)}, записей: ${c}"><span class="dt">${'<i></i>'.repeat(Math.min(3, c))}</span><b>${n}</b></button>`); }
   const soon = DB.appts.filter(a => a.date > d && a.status === 'booked').sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time)).slice(0, 5);
-  return `<div class="row between"><h1 style="margin:0">Запись</h1><button class="btn sm" data-act="appt-new">+ Запись</button></div>
-  <p class="sub" style="margin-top:4px">${cap1(parseYmd(d).toLocaleDateString('ru-RU', {month: 'long', year: 'numeric'}))}</p>
-  <div class="calnav"><button class="link" data-act="cal-shift" data-v="-7">‹ Пред. неделя</button>${d === t0 ? '' : '<button class="link" data-act="cal-today">Сегодня</button>'}<button class="link" data-act="cal-shift" data-v="7">След. неделя ›</button></div>
-  <div class="week">${days.map((s, i) => `<button class="day ${s === d ? 'on' : ''} ${s === t0 ? 'today' : ''}" data-act="cal-day" data-v="${s}" aria-label="${dayTitle(s)}, записей: ${cnt(s)}"><span>${wk[i]}</span><b>${parseYmd(s).getDate()}</b><i>${cnt(s) || ''}</i></button>`).join('')}</div>
-  <label for="cal-date">Перейти к дате</label><input type="date" id="cal-date" data-chg="cal-date" value="${d}">
-  <div class="row between"><div class="cap">${dayTitle(d)}</div><button class="link" data-act="appt-new" style="margin-top:12px">+ На этот день</button></div>
-  ${apptsOn(d).map(a => apptRow(a)).join('') || '<div class="empty">На этот день записей нет</div>'}
+  return `<div class="row between"><h1 style="margin:0">Календарь</h1><button class="btn sm" data-act="appt-new">+ Запись</button></div>
+  <div class="calnav" style="margin-top:14px"><button class="link" data-act="cal-month" data-v="-1" aria-label="Предыдущий месяц" style="font-size:22px;padding:4px 10px">←</button><b style="font-size:17px">${cap1(first.toLocaleDateString('ru-RU', {month: 'long'}))} ${y}</b><button class="link" data-act="cal-month" data-v="1" aria-label="Следующий месяц" style="font-size:22px;padding:4px 10px">→</button></div>
+  <div class="mgrid mhead">${['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map(w => `<span>${w}</span>`).join('')}</div>
+  <div class="mgrid">${cells.join('')}</div>
+  ${d.slice(0, 7) !== t0.slice(0, 7) ? '<div style="text-align:center"><button class="link" data-act="cal-today">Вернуться к сегодня</button></div>' : ''}
+  <div class="row between"><div class="cap">${dayTitle(d)}</div><button class="link" data-act="appt-new" style="margin-top:12px">+ Добавить</button></div>
+  ${apptsOn(d).map(a => apptRow(a)).join('') || '<div class="row between" style="margin:-2px 2px 4px"><span class="muted small">Записей нет</span></div>'}
   ${soon.length ? `<div class="cap">Дальше по записи</div>${soon.map(a => apptRow(a, true)).join('')}` : ''}`;
 };
 V.apptform = () => { if (!adraft) adraft = newADraft(calDay);
@@ -835,6 +846,8 @@ const A = {
   'cal-day'(el) { calDay = el.dataset.v; render(); },
   'cal-shift'(el) { calDay = addDays(calDay || today(), +el.dataset.v); render(); },
   'home-day'(el) { homeDay = el.dataset.v; render(); },
+  'cal-month'(el) { const d = parseYmd(calDay || today()), f = new Date(d.getFullYear(), d.getMonth() + (+el.dataset.v), 1), t0 = today();
+    calDay = ymd(f).slice(0, 7) === t0.slice(0, 7) ? t0 : ymd(f); render(); },
   'cal-today'() { calDay = today(); render(); },
   'appt-new'() { adraft = newADraft(location.hash.indexOf('#/cal') === 0 ? calDay : (homeDay || today())); go('#/appt/new'); },
   'appt-visit'() { adraft.visit = !adraft.visit; render(); },
