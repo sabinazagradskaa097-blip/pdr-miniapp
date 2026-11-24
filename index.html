@@ -122,6 +122,15 @@ a.btn{display:flex;align-items:center;justify-content:center;text-decoration:non
 .delta.up{color:var(--accent)} .delta.down{color:var(--bad)}
 .share{height:6px;border-radius:3px;background:var(--line);margin:4px 0 2px;overflow:hidden}
 .share i{display:block;height:100%;background:var(--accent)}
+.hweek{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:12px}
+.hday{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;min-height:76px;padding:8px 0;border:0;border-radius:14px;background:var(--surface);color:var(--text);font:inherit;cursor:pointer}
+.hday .dt{display:flex;gap:3px;height:6px}
+.hday .dt i{width:6px;height:6px;border-radius:50%;background:var(--accent)}
+.hday span{font-size:13px;color:var(--muted)}
+.hday b{font-size:17px;font-weight:600;font-variant-numeric:tabular-nums}
+.hday.on{background:var(--accent);color:var(--on-accent)}
+.hday.on span{color:var(--on-accent);opacity:.75}
+.hday.on .dt i{background:var(--on-accent)}
 </style>
 </head>
 <body>
@@ -317,7 +326,7 @@ const carFields = c => ({carId: c && c.id || '', brand: c && c.brand || '', mode
 const newDent = z => ({s: S.sizes[0].id, ls: ['flat'], q: 1, z: z || ''});
 const newDraft = c => ({car: carFields(c), paint: 'fresh', dents: [newDent()], hail: {on: false, parts: {}, up: 0, down: 0}, film: false, visit: false, arm: '', comment: ''});
 const newIDraft = c => ({car: carFields(c), marks: {}, comment: ''});
-let draft, idraft, cdraft = null, adraft = null, hfilter = 'all', carQ = '', cliQ = '', calDay = '', statP = 'month', locked = false, mapMode = 'dent';
+let homeDay = '', draft, idraft, cdraft = null, adraft = null, hfilter = 'all', carQ = '', cliQ = '', calDay = '', statP = 'month', locked = false, mapMode = 'dent';
 
 function calcDent(d, paint) {
   const si = Math.max(0, S.sizes.findIndex(x => x.id === d.s)), s = S.sizes[si];
@@ -464,14 +473,22 @@ const clientRow = c => `<a class="item" href="#/client/${encodeURIComponent(c.ke
 
 /* ───────── экраны ───────── */
 const V = {};
+function homeWeek() {
+  const t0 = today(); if (!homeDay || homeDay < t0) homeDay = t0;
+  const days = [0, 1, 2, 3, 4, 5, 6].map(i => addDays(t0, i)), list = apptsOn(homeDay);
+  const live = s => DB.appts.filter(a => a.date === s && a.status !== 'noshow').length;
+  const title = homeDay === t0 ? 'Сегодня' : homeDay === addDays(t0, 1) ? 'Завтра' : cap1(parseYmd(homeDay).toLocaleDateString('ru-RU', {weekday: 'long'}));
+  return `<div class="row between"><div class="cap">${title}, ${esc(parseYmd(homeDay).toLocaleDateString('ru-RU', {day: 'numeric', month: 'long'}))}</div><a class="link" href="#/cal" style="margin-top:12px">Календарь</a></div>
+  <div class="hweek">${days.map(s => { const d = parseYmd(s), n = live(s); return `<button class="hday ${s === homeDay ? 'on' : ''}" data-act="home-day" data-v="${s}" aria-label="${dayTitle(s)}, записей: ${n}"><span class="dt">${'<i></i>'.repeat(Math.min(3, n))}</span><span>${cap1(d.toLocaleDateString('ru-RU', {weekday: 'short'}))}</span><b>${d.getDate()}</b></button>`; }).join('')}</div>
+  ${list.length ? list.map(a => apptRow(a)).join('') : `<div class="row between" style="margin:-2px 2px 4px"><span class="muted small">Записей нет</span><button class="link" data-act="appt-new">+ Записать</button></div>`}`;
+}
 V.home = () => {
   const n = DB.orders.length, sum = DB.orders.reduce((a, o) => a + (o.total || 0), 0), mins = DB.orders.reduce((a, o) => a + (o.min || 0), 0);
   const st = (l, v) => `<div class="stat"><span>${l}</span><b>${v}</b></div>`;
   const sec = (h, t, d) => `<a class="item" href="${h}"><b>${t}</b><span class="muted">${d}</span></a>`;
   return `<h1>${esc(S.name)}</h1><p class="sub">${esc(S.sub)}</p>
   <div class="grid2"><button class="btn" data-act="new-calc">Новый расчёт</button><button class="btn ghost" data-act="appt-new">Записать клиента</button></div>
-  <div class="row between"><div class="cap">Сегодня, ${esc(parseYmd(today()).toLocaleDateString('ru-RU', {day: 'numeric', month: 'long'}))}</div><a class="link" href="#/cal" style="margin-top:12px">Календарь</a></div>
-  ${apptsOn(today()).map(a => apptRow(a)).join('') || '<div class="empty">На сегодня записей нет</div>'}
+  ${homeWeek()}
   <div class="cap">Показатели</div>
   <div class="grid2">${st('Создано заказов', n)}${st('Выполнено', DB.orders.filter(o => o.status === 'done').length)}${st('Автомобилей в базе', DB.cars.length)}${st('Сумма заказов', rub(sum))}${st('Средняя стоимость', n ? rub(sum / n) : '—')}${st('Среднее время работ', n ? dur(mins / n) : '—')}</div>
   <div class="cap">Разделы</div>
@@ -817,8 +834,9 @@ const A = {
   'stat-p'(el) { statP = el.dataset.v; render(); },
   'cal-day'(el) { calDay = el.dataset.v; render(); },
   'cal-shift'(el) { calDay = addDays(calDay || today(), +el.dataset.v); render(); },
+  'home-day'(el) { homeDay = el.dataset.v; render(); },
   'cal-today'() { calDay = today(); render(); },
-  'appt-new'() { adraft = newADraft(location.hash.indexOf('#/cal') === 0 ? calDay : today()); go('#/appt/new'); },
+  'appt-new'() { adraft = newADraft(location.hash.indexOf('#/cal') === 0 ? calDay : (homeDay || today())); go('#/appt/new'); },
   'appt-visit'() { adraft.visit = !adraft.visit; render(); },
   'save-appt'() {
     const c = adraft.car; if (!(c.client || c.phone || c.brand || c.plate)) { toast('Укажите имя, телефон или машину'); return; }
